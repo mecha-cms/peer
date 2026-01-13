@@ -1,12 +1,9 @@
 (() => {
 
 const hub = 'http://127.0.0.1/test/hub';
+const path = '/peer/web';
 
-let [path, query] = document.currentScript.src.split('#!')[1].split('?');
-
-if ('/' === path.slice(-1)) {
-    path = path.slice(0, -1);
-}
+let pathCurrent = window.location.pathname.slice(path.length);
 
 const form = {};
 const formAlert = document.createElement('p');
@@ -37,6 +34,17 @@ form.user.addEventListener('submit', function (e) {
         headers: { 'content-type': 'application/json' },
         method: 'POST'
     }).then(r => r.json()).then(r => {
+        if (200 !== r.status) {
+            if (401 === r.status) {
+                formAlert.innerHTML = 'Invalid user or pass.';
+            } else {
+                formAlert.innerHTML = 'Unknown error.';
+            }
+            this.elements.pass.value = "";
+            this.elements.pass.focus();
+            this.prepend(formAlert);
+            return;
+        }
         // For a more secure application, you may need to store the token data some-where else with encryption and/or
         // similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('jwt', r.token);
@@ -75,7 +83,8 @@ function displayEntries(route, part = 1) {
                 const listItemLink = document.createElement('a');
                 const listItemLinks = document.createElement('span');
                 listItemLink.href = "";
-                listItemLink.innerHTML = v.route.slice(1) + (v.is.folder ? '/' : "");
+                listItemLink.innerHTML = v.route.slice(1) + (v.is.file ? "" : '/');
+                listItem.append(v.is.file ? '📄 ' : '📁 ');
                 listItem.append(listItemLink);
                 listItem.append(listItemLinks);
                 list.append(listItem);
@@ -123,5 +132,12 @@ function request(route, method = 'GET', headers = {}, body = "") {
 }
 
 displayFormUser();
+
+console.log(pathCurrent);
+
+window.addEventListener('popstate', function (e) {
+    pathCurrent = window.location.pathname.slice(path.length);
+    console.log(pathCurrent);
+});
 
 })();

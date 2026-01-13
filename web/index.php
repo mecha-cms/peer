@@ -9,6 +9,6 @@
     <div role="application">
       <p role="status">Loading…</p>
     </div>
-    <script src="index.js#!<?= $_SERVER['REQUEST_URI']; ?>"></script>
+    <script src="index.js"></script>
   </body>
 </html>
