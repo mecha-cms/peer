@@ -1,0 +1,14 @@
+<IfModule mod_autoindex.c>
+  Options -Indexes
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddDefaultCharset utf-8
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule . index.php [L,QSA]
+</IfModule>
