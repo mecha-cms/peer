@@ -67,18 +67,18 @@ function displayEntries(route, part = 1) {
         console.log(r);
         document.title = 'Entries';
         window.history.pushState({}, "", path + route + '?part=' + part);
-        if (0 === r.total) {
+        if (0 === r.data.total) {
             description.innerHTML = 'No entries yet.';
         } else {
             view.replaceChildren(list);
             // Custom sort, to prioritize folder
-            r.lot.lot.sort((a, b) => {
+            r.data.lot.sort((a, b) => {
                 if (a.is.folder !== b.is.folder) {
                     return a.is.folder ? -1 : 1;
                 }
                 return a.route.localeCompare(b.route);
             });
-            r.lot.lot.forEach(v => {
+            r.data.lot.forEach(v => {
                 const listItem = document.createElement('li');
                 const listItemLink = document.createElement('a');
                 const listItemLinks = document.createElement('span');
