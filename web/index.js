@@ -1,9 +1,9 @@
 (() => {
 
 const hub = 'http://127.0.0.1/test/hub';
-const path = '/peer/web';
+const sub = '/peer/web';
 
-let pathCurrent = window.location.pathname.slice(path.length);
+let route = window.location.pathname.slice(sub.length);
 
 const form = {};
 const formAlert = document.createElement('p');
@@ -29,7 +29,7 @@ form.user.addEventListener('submit', function (e) {
     if ('@' !== key[0]) {
         key = '@' + key;
     }
-    fetch(hub + '/user', {
+    fetch(hub + '/try/user', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
         method: 'POST'
@@ -57,16 +57,16 @@ form.user.addEventListener('submit', function (e) {
     e.preventDefault();
 });
 
-function displayEntries(route, part = 1) {
+function displayEntries(of, part = 1) {
     const description = document.createElement('p');
     const list = document.createElement('ul');
     description.innerHTML = 'Loading…';
     description.setAttribute('role', 'status');
     view.replaceChildren(description);
-    request(hub + '/data' + route + '?chunk=20&part=' + part).then(r => r.json()).then(r => {
+    request(hub + '/get/data' + of + '?chunk=20&part=' + part).then(r => r.json()).then(r => {
         console.log(r);
         document.title = 'Entries';
-        window.history.pushState({}, "", path + route + '?part=' + part);
+        window.history.pushState({}, "", sub + of + '?part=' + part);
         if (0 === r.data.total) {
             description.innerHTML = 'No entries yet.';
         } else {
@@ -95,7 +95,7 @@ function displayEntries(route, part = 1) {
 
 function displayFormUser() {
     document.title = 'Enter';
-    window.history.pushState({}, "", path + '/user');
+    window.history.pushState({}, "", sub + '/user');
     const key = document.createElement('input');
     const keyParent = document.createElement('p');
     const pass = document.createElement('input');
@@ -122,22 +122,22 @@ function displayFormUser() {
     view.replaceChildren(form.user);
 }
 
-function request(route, method = 'GET', headers = {}, body = "") {
+function request(of, method = 'GET', headers = {}, body = "") {
     const jwt = localStorage.getItem('jwt');
     headers = Object.assign(headers, {
         'authorization': 'bearer ' + jwt,
         'content-type': 'application/json'
     });
-    return fetch(route, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
+    return fetch(of, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
 }
 
 displayFormUser();
 
-console.log(pathCurrent);
+console.log(route);
 
 window.addEventListener('popstate', function (e) {
-    pathCurrent = window.location.pathname.slice(path.length);
-    console.log(pathCurrent);
+    route = window.location.pathname.slice(sub.length);
+    console.log(route);
 });
 
 })();
