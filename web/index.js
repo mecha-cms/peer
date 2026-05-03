@@ -32,7 +32,12 @@ form.user.addEventListener('submit', function (e) {
         if (200 !== r.status) {
             formAlert.innerHTML = r.description || 'Unknown error.';
             this.elements.pass.value = "";
-            this.elements.pass.focus();
+            if (404 === r.status) {
+                this.elements.key.focus();
+                this.elements.key.select();
+            } else {
+                this.elements.pass.focus();
+            }
             this.prepend(formAlert);
             return;
         }
