@@ -77,7 +77,7 @@ function displayLotItem(path, query, hash) {
     const itemTitle = document.createElement('h1');
     description.setAttribute('role', 'alert');
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
+    request(hub + '/get/data' + path.slice(4).split('/').map(v => encodeURIComponent(v)).join('/')).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
@@ -118,7 +118,7 @@ function displayLotItems(path, query, hash) {
     listNavLinkPrev.innerHTML = '⬅️';
     listNavLinkPrev.title = 'Go to the previous page';
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
+    request(hub + '/get/data' + path.slice(4).split('/').map(v => encodeURIComponent(v)).join('/') + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
