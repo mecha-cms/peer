@@ -137,24 +137,24 @@ function displayLotItems(path, query, hash) {
         }
         document.title = 'Application · Folder (.' + path + ')';
         let parent = r.data.parent;
-        listNavLinkNext.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1));
-        listNavLinkParent.setAttribute('href', parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=1' : "");
-        listNavLinkPrev.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1));
         listNavLinkNext.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.getAttribute('href'));
+            window.history.pushState({}, "", this.href);
             display();
             e.preventDefault();
         });
         listNavLinkParent.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.getAttribute('href'));
+            window.history.pushState({}, "", this.href);
             display();
             e.preventDefault();
         });
         listNavLinkPrev.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.getAttribute('href'));
+            window.history.pushState({}, "", this.href);
             display();
             e.preventDefault();
         });
+        listNavLinkNext.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1);
+        listNavLinkParent.href = parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=1' : "";
+        listNavLinkPrev.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1);
         if (r.has.next) {
             listNavLinkNext.removeAttribute('aria-disabled');
         } else {
@@ -183,6 +183,10 @@ function displayLotItems(path, query, hash) {
         r.data.children.forEach(v => {
             const listItem = document.createElement('li');
             const listItemLink = document.createElement('a');
+            const listItemLinkDelete = document.createElement('a');
+            const listItemLinkEdit = document.createElement('a');
+            const listItemLinkOpen = document.createElement('a');
+            const listItemLinkView = document.createElement('a');
             const listItemLinks = document.createElement('span');
             const listItemSize = document.createElement('span');
             listItemSize.innerHTML = '..' === v.name ? "" : v.size;
@@ -193,17 +197,55 @@ function displayLotItems(path, query, hash) {
             }
             if (v.is.blob) {
                 listItemLink.addEventListener('click', function (e) {
-                    openBlob(this.getAttribute('href'));
+                    openBlob(this.href);
                     e.preventDefault();
                 });
                 listItemLink.href = hub + '/get/blob' + v.route.slice(4);
             } else {
                 listItemLink.addEventListener('click', function (e) {
-                    window.history.pushState({}, "", this.getAttribute('href'));
+                    window.history.pushState({}, "", this.href);
                     display();
                     e.preventDefault();
                 });
                 listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
+            }
+            listItemLinkDelete.addEventListener('click', function (e) {
+                alert('Delete');
+                e.preventDefault();
+            });
+            listItemLinkDelete.href = '#delete';
+            listItemLinkDelete.innerHTML = '🗑️';
+            listItemLinkDelete.title = 'Delete';
+            listItemLinkEdit.addEventListener('click', function (e) {
+                alert('Edit');
+                e.preventDefault();
+            });
+            listItemLinkEdit.href = '#edit';
+            listItemLinkEdit.innerHTML = '📝';
+            listItemLinkEdit.title = 'Edit';
+            listItemLinkOpen.addEventListener('click', function (e) {
+                listItemLink.click();
+                e.preventDefault();
+            });
+            listItemLinkOpen.href = '#open';
+            listItemLinkOpen.innerHTML = '🔍';
+            listItemLinkOpen.title = 'Open';
+            listItemLinkView.addEventListener('click', function (e) {
+                alert('View');
+                e.preventDefault();
+            });
+            listItemLinkView.href = '#view';
+            listItemLinkView.innerHTML = '👁';
+            listItemLinkView.title = 'View';
+            listItemLinks.append(listItemLinkEdit, ' ', listItemLinkDelete);
+            listItemLinks.style.display = 'flex';
+            listItemLinks.style.gap = '0.5em';
+            listItemLinks.style.justifyContent = 'end';
+            listItemLinks.style.minWidth = '4em';
+            if (v.is.blob) {
+                listItemLinks.prepend(listItemLinkView, ' ');
+            } else if (v.is.folder) {
+                listItemLinks.prepend(listItemLinkOpen, ' ');
             }
             listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
             listItems.append(listItem);
@@ -230,7 +272,7 @@ function displayFormUser(status) {
     peer.name = 'peer';
     peer.type = 'hidden';
     peer.value = 'YOUR_APPLICATION_ID';
-    task.innerHTML = 'Enter';
+    task.innerHTML = '🔓 Enter';
     task.type = 'submit';
     keyParent.append(key);
     passParent.append(pass);
@@ -259,7 +301,7 @@ function onAfterDisplay() {
         display(-1);
         e.preventDefault();
     });
-    exit.innerHTML = 'Exit';
+    exit.innerHTML = '🔒 Exit';
     p1.append(exit);
     view.append(p1);
     // Prepend folder navigation
@@ -271,7 +313,7 @@ function onAfterDisplay() {
     });
     ['asset', 'cache', 'comment', 'page', 'tag', 'trash', 'user', 'x', 'y'].forEach(v => {
         const changeOption = document.createElement('option');
-        changeOption.textContent = changeOption.value = v;
+        changeOption.textContent = '📁 ' + (changeOption.value = v);
         changeOptions.append(changeOption);
     });
     p2.append(changeOptions);
