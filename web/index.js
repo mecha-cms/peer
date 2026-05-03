@@ -133,7 +133,7 @@ function displayLotItems(path, query, hash) {
         document.title = 'Application · Folder (.' + path + ')';
         let parent = r.data.parent;
         listNavLinkNext.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1));
-        listNavLinkParent.setAttribute('href', parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=' + r.query.part : "");
+        listNavLinkParent.setAttribute('href', parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=1' : "");
         listNavLinkPrev.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1));
         listNavLinkNext.addEventListener('click', function (e) {
             window.history.pushState({}, "", this.getAttribute('href'));
