@@ -11,10 +11,10 @@ form.file = document.createElement('form');
 form.folder = document.createElement('form');
 form.user = document.createElement('form');
 
-form.blob.method = 'POST';
-form.file.method = 'POST';
-form.folder.method = 'POST';
-form.user.method = 'POST';
+form.blob.method = 'post';
+form.file.method = 'post';
+form.folder.method = 'post';
+form.user.method = 'post';
 
 form.user.addEventListener('submit', function (e) {
     let key = this.elements.key.value,
@@ -53,6 +53,30 @@ form.user.addEventListener('submit', function (e) {
     });
     e.preventDefault();
 });
+
+function createTracesFromString(path) {
+    const span = document.createElement('span');
+    let trace = '/',
+        traces = path.split('/'),
+        tracesMax = traces.length;
+    traces.forEach((v, k) => {
+        trace += '/' + (v = decodeURIComponent(v));
+        if (k < 2) {
+            k > 0 && span.append('/');
+            span.append(v);
+        } else {
+            const a = document.createElement('a');
+            a.addEventListener('click', onClickAnchor);
+            a.href = sub + trace.slice(1) + '?chunk=20&part=1';
+            a.innerHTML = v;
+            if (tracesMax === (k + 1)) {
+                a.setAttribute('aria-current', 'location');
+            }
+            span.append('/', a);
+        }
+    });
+    return span;
+}
 
 function display(status) {
     const hash = window.location.hash;
@@ -96,7 +120,7 @@ function displayLotItem(path, query, hash) {
         }
         document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
         itemContent.textContent = JSON.stringify(r, null, 2);
-        itemTitle.innerHTML = '.' + path.split('/').map(v => decodeURIComponent(v)).join('/');
+        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
         view.replaceChildren(itemTitle, itemContent);
         onAfterDisplay();
     }).catch(console.error);
@@ -137,21 +161,9 @@ function displayLotItems(path, query, hash) {
         }
         document.title = 'Application · Folder (.' + path + ')';
         let parent = r.data.parent;
-        listNavLinkNext.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.href);
-            display();
-            e.preventDefault();
-        });
-        listNavLinkParent.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.href);
-            display();
-            e.preventDefault();
-        });
-        listNavLinkPrev.addEventListener('click', function (e) {
-            window.history.pushState({}, "", this.href);
-            display();
-            e.preventDefault();
-        });
+        listNavLinkNext.addEventListener('click', onClickAnchor);
+        listNavLinkParent.addEventListener('click', onClickAnchor);
+        listNavLinkPrev.addEventListener('click', onClickAnchor);
         listNavLinkNext.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1);
         listNavLinkParent.href = parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=1' : "";
         listNavLinkPrev.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1);
@@ -171,7 +183,7 @@ function displayLotItems(path, query, hash) {
             listNavLinkPrev.setAttribute('aria-disabled', 'true');
         }
         listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
-        listTitle.innerHTML = '.' + path.split('/').map(v => decodeURIComponent(v)).join('/') + ' #' + r.query.part;
+        listTitle.append('📂', ' ', createTracesFromString('.' + path));
         view.replaceChildren(listTitle, listItems);
         if (r.has.next || r.has.prev) {
             view.append(listNav);
@@ -202,11 +214,7 @@ function displayLotItems(path, query, hash) {
                 });
                 listItemLink.href = hub + '/get/blob' + v.route.slice(4);
             } else {
-                listItemLink.addEventListener('click', function (e) {
-                    window.history.pushState({}, "", this.href);
-                    display();
-                    e.preventDefault();
-                });
+                listItemLink.addEventListener('click', onClickAnchor);
                 listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
             }
             listItemLinkDelete.addEventListener('click', function (e) {
@@ -227,7 +235,7 @@ function displayLotItems(path, query, hash) {
                 listItemLink.click();
                 e.preventDefault();
             });
-            listItemLinkOpen.href = '#open';
+            listItemLinkOpen.href = listItemLink.href;
             listItemLinkOpen.innerHTML = '🔍';
             listItemLinkOpen.title = 'Open';
             listItemLinkView.addEventListener('click', function (e) {
@@ -241,7 +249,7 @@ function displayLotItems(path, query, hash) {
             listItemLinks.style.display = 'flex';
             listItemLinks.style.gap = '0.5em';
             listItemLinks.style.justifyContent = 'end';
-            listItemLinks.style.minWidth = '4em';
+            listItemLinks.style.minWidth = '5em';
             if (v.is.blob) {
                 listItemLinks.prepend(listItemLinkView, ' ');
             } else if (v.is.folder) {
@@ -290,9 +298,33 @@ function displayFormUser(status) {
 }
 
 function onAfterDisplay() {
-    const p1 = document.createElement('p');
-    const p2 = document.createElement('p');
-    // Append exit link
+    const bar = document.createElement('p');
+    // Folder navigation
+    const changeOptions = document.createElement('select');
+    changeOptions.addEventListener('change', function (e) {
+        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
+        display();
+        e.preventDefault();
+    });
+    Object.entries({
+        asset: 'Asset',
+        cache: 'Cache',
+        comment: 'Comment',
+        page: 'Page',
+        tag: 'Tag',
+        trash: 'Trash',
+        user: 'User',
+        x: 'Extension',
+        y: 'Layout'
+
+    }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
+        const changeOption = document.createElement('option');
+        changeOption.textContent = '📁 ' + v[1];
+        changeOption.value = v[0];
+        changeOptions.append(changeOption);
+    });
+    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
+    // Exit link
     const exit = document.createElement('button');
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('jwt');
@@ -302,29 +334,23 @@ function onAfterDisplay() {
         e.preventDefault();
     });
     exit.innerHTML = '🔒 Exit';
-    p1.append(exit);
-    view.append(p1);
-    // Prepend folder navigation
-    const changeOptions = document.createElement('select');
-    changeOptions.addEventListener('change', function (e) {
-        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
-        display();
-        e.preventDefault();
-    });
-    ['asset', 'cache', 'comment', 'page', 'tag', 'trash', 'user', 'x', 'y'].forEach(v => {
-        const changeOption = document.createElement('option');
-        changeOption.textContent = '📁 ' + (changeOption.value = v);
-        changeOptions.append(changeOption);
-    });
-    p2.append(changeOptions);
-    view.prepend(p2);
-    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
+    bar.append(changeOptions, exit);
+    bar.style.display = 'flex';
+    bar.style.justifyContent = 'space-between';
+    bar.style.marginTop = 0;
+    view.prepend(bar);
     // if (1 === query._status) {
     //     const description = document.createElement('p');
     //     description.innerHTML = 'Logged in.';
     //     description.setAttribute('role', 'alert');
     //     view.prepend(description);
     // }
+}
+
+function onClickAnchor(e) {
+    window.history.pushState({}, "", this.href);
+    display();
+    e.preventDefault();
 }
 
 function openBlob(path, query, hash) {
