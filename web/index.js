@@ -77,7 +77,7 @@ function displayLotItem(path, query, hash) {
     const itemTitle = document.createElement('h1');
     description.setAttribute('role', 'alert');
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4).split('/').map(v => encodeURIComponent(v)).join('/')).then(r => r.json()).then(r => {
+    request(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
@@ -96,7 +96,7 @@ function displayLotItem(path, query, hash) {
         }
         document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
         itemContent.textContent = JSON.stringify(r, null, 2);
-        itemTitle.innerHTML = '.' + path;
+        itemTitle.innerHTML = '.' + path.split('/').map(v => decodeURIComponent(v)).join('/');
         view.replaceChildren(itemTitle, itemContent);
         onAfterDisplay();
     }).catch(console.error);
@@ -118,7 +118,7 @@ function displayLotItems(path, query, hash) {
     listNavLinkPrev.innerHTML = '⬅️';
     listNavLinkPrev.title = 'Go to the previous page';
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4).split('/').map(v => encodeURIComponent(v)).join('/') + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
+    request(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
@@ -171,7 +171,7 @@ function displayLotItems(path, query, hash) {
             listNavLinkPrev.setAttribute('aria-disabled', 'true');
         }
         listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
-        listTitle.innerHTML = '.' + path + '#' + r.query.part;
+        listTitle.innerHTML = '.' + path.split('/').map(v => decodeURIComponent(v)).join('/') + ' #' + r.query.part;
         view.replaceChildren(listTitle, listItems);
         if (r.has.next || r.has.prev) {
             view.append(listNav);
