@@ -40,7 +40,7 @@ form.user.addEventListener('submit', function (e) {
         // similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('jwt', r.token);
         localStorage.setItem('user', r.user);
-        window.history.pushState({}, "", sub + '/lot/asset?chunk=5&part=1');
+        window.history.pushState({}, "", sub + '/lot/asset?chunk=20&part=1');
         display(1);
     }).catch(e => {
         formAlert.innerHTML = e;
@@ -70,20 +70,30 @@ function displayLotItem(path, query, hash) {
     const description = document.createElement('p');
     const itemContent = document.createElement('pre');
     const itemTitle = document.createElement('h1');
-    description.innerHTML = 'Loading…';
     description.setAttribute('role', 'alert');
-    view.replaceChildren(description);
+    document.title = 'Loading…';
     request(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
         console.log(r);
-        if (404 === r.status) {
-
-        } else {
-            document.title = 'Application · `.' + path + '`';
-            itemContent.textContent = JSON.stringify(r, null, 2);
-            itemTitle.innerHTML = '.' + path;
-            view.replaceChildren(itemTitle, itemContent);
-            onAfterDisplay();
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('user');
+            window.history.pushState({}, "", sub + '/user');
+            display();
+            return;
         }
+        if (404 === r.status) {
+            document.title = 'Application · Error';
+            description.innerHTML = r.description;
+            view.replaceChildren(description);
+            onAfterDisplay();
+            return;
+        }
+        document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
+        itemContent.textContent = JSON.stringify(r, null, 2);
+        itemTitle.innerHTML = '.' + path;
+        view.replaceChildren(itemTitle, itemContent);
+        onAfterDisplay();
     }).catch(console.error);
 }
 
@@ -95,85 +105,105 @@ function displayLotItems(path, query, hash) {
     const listNavLinkParent = document.createElement('a');
     const listNavLinkPrev = document.createElement('a');
     const listTitle = document.createElement('h1');
+    description.setAttribute('role', 'alert');
     listNavLinkNext.innerHTML = '➡️';
     listNavLinkNext.title = 'Go to the next page';
     listNavLinkParent.innerHTML = '⬆️';
     listNavLinkParent.title = 'Go to parent';
     listNavLinkPrev.innerHTML = '⬅️';
     listNavLinkPrev.title = 'Go to the previous page';
-    description.innerHTML = 'Loading…';
-    description.setAttribute('role', 'alert');
-    view.replaceChildren(description);
+    document.title = 'Loading…';
     request(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
-        document.title = 'Application · `.' + path + '`';
-        if (!r.has.children) {
-            description.innerHTML = 'No items yet.';
-        } else {
-            listNavLinkNext.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1));
-            listNavLinkParent.setAttribute('href', sub + r.data.parent.route + '?chunk=' + r.query.chunk + '&part=' + r.query.part);
-            listNavLinkPrev.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1));
-            listNavLinkNext.addEventListener('click', function (e) {
-                window.history.pushState({}, "", this.getAttribute('href'));
-                display();
-                e.preventDefault();
-            });
-            listNavLinkParent.addEventListener('click', function (e) {
-                window.history.pushState({}, "", this.getAttribute('href'));
-                display();
-                e.preventDefault();
-            });
-            listNavLinkPrev.addEventListener('click', function (e) {
-                window.history.pushState({}, "", this.getAttribute('href'));
-                display();
-                e.preventDefault();
-            });
-            if (r.has.next) {
-                listNavLinkNext.removeAttribute('aria-disabled');
-            } else {
-                listNavLinkNext.setAttribute('aria-disabled', 'true');
-            }
-            if (r.has.parent) {
-                listNavLinkParent.removeAttribute('aria-disabled');
-            } else {
-                listNavLinkParent.setAttribute('aria-disabled', 'true');
-            }
-            if (r.has.prev) {
-                listNavLinkPrev.removeAttribute('aria-disabled');
-            } else {
-                listNavLinkPrev.setAttribute('aria-disabled', 'true');
-            }
-            listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
-            listTitle.innerHTML = '.' + path + '#' + r.query.part;
-            view.replaceChildren(listTitle, listItems, listNav);
-            r.data.children.forEach(v => {
-                const listItem = document.createElement('li');
-                const listItemLink = document.createElement('a');
-                const listItemLinks = document.createElement('span');
-                const listItemSize = document.createElement('span');
-                listItemSize.innerHTML = v.size;
-                listItemSize.setAttribute('role', 'status');
-                listItemLink.innerHTML = v.name + (v.is.file ? '.' + v.x : '/');
-                if (v.is.blob) {
-                    listItemLink.addEventListener('click', function (e) {
-                        openBlob(this.getAttribute('href'));
-                        e.preventDefault();
-                    });
-                    listItemLink.href = hub + '/get/blob' + v.route.slice(4);
-                    listItemLink.innerHTML += ' ↗️';
-                } else {
-                    listItemLink.addEventListener('click', function (e) {
-                        window.history.pushState({}, "", this.getAttribute('href'));
-                        display();
-                        e.preventDefault();
-                    });
-                    listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
-                }
-                listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
-                listItems.append(listItem);
-            });
-            onAfterDisplay();
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('user');
+            window.history.pushState({}, "", sub + '/user');
+            display();
+            return;
         }
+        if (404 === r.status) {
+            document.title = 'Application · Error';
+            description.innerHTML = r.description;
+            view.replaceChildren(description);
+            onAfterDisplay();
+            return;
+        }
+        document.title = 'Application · Folder (.' + path + ')';
+        let parent = r.data.parent;
+        listNavLinkNext.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1));
+        listNavLinkParent.setAttribute('href', parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=' + r.query.part : "");
+        listNavLinkPrev.setAttribute('href', sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1));
+        listNavLinkNext.addEventListener('click', function (e) {
+            window.history.pushState({}, "", this.getAttribute('href'));
+            display();
+            e.preventDefault();
+        });
+        listNavLinkParent.addEventListener('click', function (e) {
+            window.history.pushState({}, "", this.getAttribute('href'));
+            display();
+            e.preventDefault();
+        });
+        listNavLinkPrev.addEventListener('click', function (e) {
+            window.history.pushState({}, "", this.getAttribute('href'));
+            display();
+            e.preventDefault();
+        });
+        if (r.has.next) {
+            listNavLinkNext.removeAttribute('aria-disabled');
+        } else {
+            listNavLinkNext.setAttribute('aria-disabled', 'true');
+        }
+        if (r.has.parent) {
+            listNavLinkParent.removeAttribute('aria-disabled');
+        } else {
+            listNavLinkParent.setAttribute('aria-disabled', 'true');
+        }
+        if (r.has.prev) {
+            listNavLinkPrev.removeAttribute('aria-disabled');
+        } else {
+            listNavLinkPrev.setAttribute('aria-disabled', 'true');
+        }
+        listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
+        listTitle.innerHTML = '.' + path + '#' + r.query.part;
+        view.replaceChildren(listTitle, listItems);
+        if (r.has.next || r.has.prev) {
+            view.append(listNav);
+        }
+        if (parent) {
+            parent.name = '..';
+            r.data.children.unshift(parent);
+        }
+        r.data.children.forEach(v => {
+            const listItem = document.createElement('li');
+            const listItemLink = document.createElement('a');
+            const listItemLinks = document.createElement('span');
+            const listItemSize = document.createElement('span');
+            listItemSize.innerHTML = '..' === v.name ? "" : v.size;
+            listItemSize.setAttribute('role', 'status');
+            listItemLink.innerHTML = v.name + (v.is.file ? '.' + v.x : "");
+            if ('..' === v.name) {
+                listItemLink.title = 'Go to parent';
+            }
+            if (v.is.blob) {
+                listItemLink.addEventListener('click', function (e) {
+                    openBlob(this.getAttribute('href'));
+                    e.preventDefault();
+                });
+                listItemLink.href = hub + '/get/blob' + v.route.slice(4);
+            } else {
+                listItemLink.addEventListener('click', function (e) {
+                    window.history.pushState({}, "", this.getAttribute('href'));
+                    display();
+                    e.preventDefault();
+                });
+                listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
+            }
+            listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
+            listItems.append(listItem);
+        });
+        onAfterDisplay();
     }).catch(console.error);
 }
 
@@ -213,9 +243,10 @@ function displayFormUser(status) {
 }
 
 function onAfterDisplay() {
-    // Insert exit link
+    const p1 = document.createElement('p');
+    const p2 = document.createElement('p');
+    // Append exit link
     const exit = document.createElement('button');
-    const p = document.createElement('p');
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('jwt');
         localStorage.removeItem('user');
@@ -224,8 +255,23 @@ function onAfterDisplay() {
         e.preventDefault();
     });
     exit.innerHTML = 'Exit';
-    p.append(exit);
-    view.append(p);
+    p1.append(exit);
+    view.append(p1);
+    // Prepend folder navigation
+    const changeOptions = document.createElement('select');
+    changeOptions.addEventListener('change', function (e) {
+        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
+        display();
+        e.preventDefault();
+    });
+    ['asset', 'cache', 'comment', 'page', 'tag', 'trash', 'user', 'x', 'y'].forEach(v => {
+        const changeOption = document.createElement('option');
+        changeOption.textContent = changeOption.value = v;
+        changeOptions.append(changeOption);
+    });
+    p2.append(changeOptions);
+    view.prepend(p2);
+    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
     // if (1 === query._status) {
     //     const description = document.createElement('p');
     //     description.innerHTML = 'Logged in.';
