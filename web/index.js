@@ -203,7 +203,7 @@ function displayLotItems(path, query, hash) {
             const listItemSize = document.createElement('span');
             listItemSize.innerHTML = '..' === v.name ? "" : v.size;
             listItemSize.setAttribute('role', 'status');
-            listItemLink.innerHTML = v.name + (v.is.file ? '.' + v.x : "");
+            listItemLink.innerHTML = (v.name ?? "") + (v.is.file ? '.' + v.x : "");
             if ('..' === v.name) {
                 listItemLink.title = 'Go to parent';
             }
