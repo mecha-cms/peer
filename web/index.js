@@ -1,15 +1,15 @@
 // (() => {
 
 const form = {};
-const formAlert = document.createElement('p');
+const formAlert = createElement('p');
 const view = document.querySelector('[role=application]');
 
 formAlert.setAttribute('role', 'alert');
 
-form.blob = document.createElement('form');
-form.file = document.createElement('form');
-form.folder = document.createElement('form');
-form.user = document.createElement('form');
+form.blob = createElement('form');
+form.file = createElement('form');
+form.folder = createElement('form');
+form.user = createElement('form');
 
 form.blob.method = 'post';
 form.file.method = 'post';
@@ -54,8 +54,19 @@ form.user.addEventListener('submit', function (e) {
     e.preventDefault();
 });
 
+function createElement(name, content, attributes) {
+    const element = document.createElement(name);
+    if (attributes) {
+        // TODO
+    }
+    if (content) {
+        element.innerHTML = content;
+    }
+    return element;
+}
+
 function createTracesFromString(path) {
-    const span = document.createElement('span');
+    const span = createElement('span');
     let trace = '/',
         traces = path.split('/'),
         tracesMax = traces.length;
@@ -65,7 +76,7 @@ function createTracesFromString(path) {
             k > 0 && span.append('/');
             span.append(v);
         } else {
-            const a = document.createElement('a');
+            const a = createElement('a');
             a.addEventListener('click', onClickAnchor);
             a.href = sub + trace.slice(1) + '?chunk=20&part=1';
             a.innerHTML = v;
@@ -96,9 +107,9 @@ function display(status) {
 }
 
 function displayLotItem(path, query, hash) {
-    const description = document.createElement('p');
-    const itemContent = document.createElement('pre');
-    const itemTitle = document.createElement('h1');
+    const description = createElement('p');
+    const itemContent = createElement('pre');
+    const itemTitle = createElement('h1');
     description.setAttribute('role', 'alert');
     document.title = 'Loading…';
     request(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
@@ -127,13 +138,13 @@ function displayLotItem(path, query, hash) {
 }
 
 function displayLotItems(path, query, hash) {
-    const description = document.createElement('p');
-    const listItems = document.createElement('ul');
-    const listNav = document.createElement('nav');
-    const listNavLinkNext = document.createElement('a');
-    const listNavLinkParent = document.createElement('a');
-    const listNavLinkPrev = document.createElement('a');
-    const listTitle = document.createElement('h1');
+    const description = createElement('p');
+    const listItems = createElement('ul');
+    const listNav = createElement('nav');
+    const listNavLinkNext = createElement('a');
+    const listNavLinkParent = createElement('a');
+    const listNavLinkPrev = createElement('a');
+    const listTitle = createElement('h1');
     description.setAttribute('role', 'alert');
     listNavLinkNext.innerHTML = '➡️';
     listNavLinkNext.title = 'Go to the next page';
@@ -193,17 +204,17 @@ function displayLotItems(path, query, hash) {
             r.data.children.unshift(parent);
         }
         r.data.children.forEach(v => {
-            const listItem = document.createElement('li');
-            const listItemLink = document.createElement('a');
-            const listItemLinkDelete = document.createElement('a');
-            const listItemLinkEdit = document.createElement('a');
-            const listItemLinkOpen = document.createElement('a');
-            const listItemLinkView = document.createElement('a');
-            const listItemLinks = document.createElement('span');
-            const listItemSize = document.createElement('span');
+            const listItem = createElement('li');
+            const listItemLink = createElement('a');
+            const listItemLinkDelete = createElement('a');
+            const listItemLinkEdit = createElement('a');
+            const listItemLinkOpen = createElement('a');
+            const listItemLinkView = createElement('a');
+            const listItemLinks = createElement('span');
+            const listItemSize = createElement('span');
             listItemSize.innerHTML = '..' === v.name ? "" : v.size;
             listItemSize.setAttribute('role', 'status');
-            listItemLink.innerHTML = (v.name ?? "") + (v.is.file ? '.' + v.x : "");
+            listItemLink.innerHTML = v.name + (v.is.file ? '.' + v.x : "");
             if ('..' === v.name) {
                 listItemLink.title = 'Go to parent';
             }
@@ -264,13 +275,13 @@ function displayLotItems(path, query, hash) {
 
 function displayFormUser(status) {
     document.title = 'Application · Enter';
-    const key = document.createElement('input');
-    const keyParent = document.createElement('p');
-    const pass = document.createElement('input');
-    const passParent = document.createElement('p');
-    const peer = document.createElement('input');
-    const task = document.createElement('button');
-    const taskParent = document.createElement('p');
+    const key = createElement('input');
+    const keyParent = createElement('p');
+    const pass = createElement('input');
+    const passParent = createElement('p');
+    const peer = createElement('input');
+    const task = createElement('button');
+    const taskParent = createElement('p');
     key.name = 'key';
     key.placeholder = 'User';
     key.type = 'text';
@@ -290,7 +301,7 @@ function displayFormUser(status) {
     view.replaceChildren(form.user);
     key.focus();
     if (-1 === status && !localStorage.getItem('jwt')) {
-        const description = document.createElement('p');
+        const description = createElement('p');
         description.innerHTML = 'Logged out.';
         description.setAttribute('role', 'alert');
         view.prepend(description);
@@ -298,9 +309,9 @@ function displayFormUser(status) {
 }
 
 function onAfterDisplay() {
-    const bar = document.createElement('p');
+    const bar = createElement('p');
     // Folder navigation
-    const changeOptions = document.createElement('select');
+    const changeOptions = createElement('select');
     changeOptions.addEventListener('change', function (e) {
         window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
         display();
@@ -318,14 +329,14 @@ function onAfterDisplay() {
         y: 'Layout'
 
     }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
-        const changeOption = document.createElement('option');
+        const changeOption = createElement('option');
         changeOption.textContent = '📁 ' + v[1];
         changeOption.value = v[0];
         changeOptions.append(changeOption);
     });
     changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
     // Exit link
-    const exit = document.createElement('button');
+    const exit = createElement('button');
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('jwt');
         localStorage.removeItem('user');
@@ -340,7 +351,7 @@ function onAfterDisplay() {
     bar.style.marginTop = 0;
     view.prepend(bar);
     // if (1 === query._status) {
-    //     const description = document.createElement('p');
+    //     const description = createElement('p');
     //     description.innerHTML = 'Logged in.';
     //     description.setAttribute('role', 'alert');
     //     view.prepend(description);
