@@ -150,7 +150,7 @@ function onAfterView() {
     for (let route in folderSizeViews) {
         (() => {
             let listItemSize = folderSizeViews[route];
-            f3h(hub + '/+/folder.size' + route.slice(4)).then(r => r.json()).then(r => {
+            f3h(hub + '/%2B/folder.size' + route.slice(4)).then(r => r.json()).then(r => {
                 if (200 === r.status) {
                     listItemSize.innerHTML = r.value;
                 }
@@ -261,7 +261,7 @@ function viewLotItem(path, query, hash) {
         // let folderSizeCurrent = createElement('span', '…');
         // folderSizeCurrent.setAttribute('role', 'status');
         // itemTitle.append(' ', folderSizeCurrent);
-        // f3h(hub + '/+/folder.size' + r.data.parent.route.slice(4)).then(r => r.json()).then(r => {
+        // f3h(hub + '/%2B/folder.size' + r.data.parent.route.slice(4)).then(r => r.json()).then(r => {
         //     if (200 === r.status) {
         //         folderSizeCurrent.innerHTML = r.value;
         //     }
@@ -333,7 +333,7 @@ function viewLotItems(path, query, hash) {
         //     let folderSizeCurrent = createElement('span', '…');
         //     folderSizeCurrent.setAttribute('role', 'status');
         //     listTitle.append(' ', folderSizeCurrent);
-        //     f3h(hub + '/+/folder.size' + path.slice(4)).then(r => r.json()).then(r => {
+        //     f3h(hub + '/%2B/folder.size' + path.slice(4)).then(r => r.json()).then(r => {
         //         if (200 === r.status) {
         //             folderSizeCurrent.innerHTML = r.value;
         //         }
