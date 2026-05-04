@@ -1,8 +1,10 @@
 // (() => {
 
+const folderSizeViews = {};
+
+const application = document.querySelector('[role=application]');
 const form = {};
 const formAlert = createElement('p');
-const view = document.querySelector('[role=application]');
 
 formAlert.setAttribute('role', 'alert');
 
@@ -24,7 +26,7 @@ form.user.addEventListener('submit', function (e) {
     if ('@' !== key[0]) {
         key = '@' + key;
     }
-    fetch(hub + '/try/user', {
+    fetch(hub + '/enter', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
         method: 'POST'
@@ -46,7 +48,7 @@ form.user.addEventListener('submit', function (e) {
         localStorage.setItem('jwt', r.token);
         localStorage.setItem('user', r.user);
         window.history.pushState({}, "", sub + '/lot/asset?chunk=20&part=1');
-        display(1);
+        view(1);
     }).catch(e => {
         formAlert.innerHTML = e;
         this.prepend(formAlert);
@@ -89,62 +91,194 @@ function createTracesFromString(path) {
     return span;
 }
 
-function display(status) {
+function f3h(path, method = 'GET', headers = {}, body = "") {
+    const jwt = localStorage.getItem('jwt');
+    headers = Object.assign({
+        'authorization': 'bearer ' + jwt,
+        'content-type': 'application/json'
+    }, headers);
+    return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
+}
+
+function onAfterView() {
+    const bar = createElement('p');
+    // Folder navigation
+    const changeOptions = createElement('select');
+    changeOptions.addEventListener('change', function (e) {
+        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
+        view();
+        e.preventDefault();
+    });
+    Object.entries({
+        asset: 'Asset',
+        cache: 'Cache',
+        comment: 'Comment',
+        page: 'Page',
+        tag: 'Tag',
+        trash: 'Trash',
+        user: 'User',
+        x: 'Extension',
+        y: 'Layout'
+    }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
+        const changeOption = createElement('option');
+        changeOption.textContent = '📁 ' + v[1];
+        changeOption.value = v[0];
+        changeOptions.append(changeOption);
+    });
+    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
+    // Exit link
+    const exit = createElement('button');
+    exit.addEventListener('click', function (e) {
+        localStorage.removeItem('jwt');
+        localStorage.removeItem('user');
+        window.history.pushState({}, "", sub + '/user');
+        view(-1);
+        e.preventDefault();
+    });
+    exit.innerHTML = '🔒 Exit';
+    bar.append(changeOptions, exit);
+    bar.style.display = 'flex';
+    bar.style.justifyContent = 'space-between';
+    application.prepend(bar);
+    // if (1 === query._status) {
+    //     const description = createElement('p');
+    //     description.innerHTML = 'Logged in.';
+    //     description.setAttribute('role', 'alert');
+    //     application.prepend(description);
+    // }
+    // Calculate folder size then view
+    for (let route in folderSizeViews) {
+        (() => {
+            let listItemSize = folderSizeViews[route];
+            f3h(hub + '/+/folder.size' + route.slice(4)).then(r => r.json()).then(r => {
+                if (200 === r.status) {
+                    listItemSize.innerHTML = r.value;
+                }
+            });
+        })();
+    }
+}
+
+function onClickAnchor(e) {
+    window.history.pushState({}, "", this.href);
+    view();
+    e.preventDefault();
+}
+
+function openBlob(path, query, hash) {
+    f3h(path, 'GET').then(r => {
+        if (!r.ok) {
+            throw new Error('Request failed.');
+        }
+        return r.blob();
+    }).then(blob => {
+        let v = URL.createObjectURL(blob);
+        window.open(v, '_blank');
+        setTimeout(() => URL.revokeObjectURL(v), 1000);
+    }).catch(console.error);
+}
+
+function view(status) {
     const hash = window.location.hash;
     const path = window.location.pathname.slice(sub.length);
     const query = Object.fromEntries(new URLSearchParams(window.location.search));
     if ('/user' === path) {
         if (localStorage.getItem('jwt')) {
             // TODO: Persistent enter state
-            displayFormUser(status);
+            viewFormUser(status);
         } else {
-            displayFormUser(status);
+            viewFormUser(status);
         }
     } else {
         query._status = status;
-        query.part ? displayLotItems(path, query, hash) : displayLotItem(path, query, hash);
+        query.part ? viewLotItems(path, query, hash) : viewLotItem(path, query, hash);
     }
 }
 
-function displayLotItem(path, query, hash) {
+function viewFormUser(status) {
+    document.title = 'Application · Enter';
+    const key = createElement('input');
+    const keyParent = createElement('p');
+    const pass = createElement('input');
+    const passParent = createElement('p');
+    const peer = createElement('input');
+    const task = createElement('button');
+    const taskParent = createElement('p');
+    key.name = 'key';
+    key.placeholder = 'User';
+    key.type = 'text';
+    pass.name = 'pass';
+    pass.placeholder = 'Pass';
+    pass.type = 'password';
+    peer.name = 'peer';
+    peer.type = 'hidden';
+    peer.value = 'YOUR_APPLICATION_ID';
+    task.innerHTML = '🔓 Enter';
+    task.type = 'submit';
+    keyParent.append(key);
+    passParent.append(pass);
+    taskParent.append(task);
+    taskParent.setAttribute('role', 'group');
+    form.user.replaceChildren(keyParent, passParent, taskParent, peer);
+    application.replaceChildren(form.user);
+    key.focus();
+    if (-1 === status && !localStorage.getItem('jwt')) {
+        const description = createElement('p');
+        description.innerHTML = 'Logged out.';
+        description.setAttribute('aria-live', 'polite');
+        description.setAttribute('role', 'alert');
+        application.prepend(description);
+    }
+}
+
+function viewLotItem(path, query, hash) {
     const description = createElement('p');
     const itemContent = createElement('pre');
-    const itemTitle = createElement('h1');
+    const itemTitle = createElement('h2');
     description.setAttribute('role', 'alert');
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
+    f3h(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('jwt');
             localStorage.removeItem('user');
             window.history.pushState({}, "", sub + '/user');
-            display();
+            view();
             return;
         }
         if (404 === r.status) {
             document.title = 'Application · Error';
             description.innerHTML = r.description;
-            view.replaceChildren(description);
-            onAfterDisplay();
+            application.replaceChildren(description);
+            onAfterView();
             return;
         }
         document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
+        itemContent.style.fontFamily = 'monospace'; // TODO
         itemContent.textContent = JSON.stringify(r, null, 2);
         itemTitle.append('📂', ' ', createTracesFromString('.' + path));
-        view.replaceChildren(itemTitle, itemContent);
-        onAfterDisplay();
+        // let folderSizeCurrent = createElement('span', '…');
+        // folderSizeCurrent.setAttribute('role', 'status');
+        // itemTitle.append(' ', folderSizeCurrent);
+        // f3h(hub + '/+/folder.size' + r.data.parent.route.slice(4)).then(r => r.json()).then(r => {
+        //     if (200 === r.status) {
+        //         folderSizeCurrent.innerHTML = r.value;
+        //     }
+        // });
+        application.replaceChildren(itemTitle, itemContent);
+        onAfterView();
     }).catch(console.error);
 }
 
-function displayLotItems(path, query, hash) {
+function viewLotItems(path, query, hash) {
     const description = createElement('p');
     const listItems = createElement('ul');
     const listNav = createElement('nav');
     const listNavLinkNext = createElement('a');
     const listNavLinkParent = createElement('a');
     const listNavLinkPrev = createElement('a');
-    const listTitle = createElement('h1');
+    const listTitle = createElement('h2');
     description.setAttribute('role', 'alert');
     listNavLinkNext.innerHTML = '➡️';
     listNavLinkNext.title = 'Go to the next page';
@@ -153,21 +287,21 @@ function displayLotItems(path, query, hash) {
     listNavLinkPrev.innerHTML = '⬅️';
     listNavLinkPrev.title = 'Go to the previous page';
     document.title = 'Loading…';
-    request(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
+    f3h(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('jwt');
             localStorage.removeItem('user');
             window.history.pushState({}, "", sub + '/user');
-            display();
+            view();
             return;
         }
         if (404 === r.status) {
             document.title = 'Application · Error';
             description.innerHTML = r.description;
-            view.replaceChildren(description);
-            onAfterDisplay();
+            application.replaceChildren(description);
+            onAfterView();
             return;
         }
         document.title = 'Application · Folder (.' + path + ')';
@@ -195,9 +329,19 @@ function displayLotItems(path, query, hash) {
         }
         listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
         listTitle.append('📂', ' ', createTracesFromString('.' + path));
-        view.replaceChildren(listTitle, listItems);
+        // if (r.has.parent) {
+        //     let folderSizeCurrent = createElement('span', '…');
+        //     folderSizeCurrent.setAttribute('role', 'status');
+        //     listTitle.append(' ', folderSizeCurrent);
+        //     f3h(hub + '/+/folder.size' + path.slice(4)).then(r => r.json()).then(r => {
+        //         if (200 === r.status) {
+        //             folderSizeCurrent.innerHTML = r.value;
+        //         }
+        //     });
+        // }
+        application.replaceChildren(listTitle, listItems);
         if (r.has.next || r.has.prev) {
-            view.append(listNav);
+            application.append(listNav);
         }
         if (parent) {
             parent.name = '..';
@@ -211,10 +355,12 @@ function displayLotItems(path, query, hash) {
             const listItemLinkOpen = createElement('a');
             const listItemLinkView = createElement('a');
             const listItemLinks = createElement('span');
-            const listItemSize = createElement('span');
-            listItemSize.innerHTML = '..' === v.name ? "" : v.size;
+            const listItemSize = createElement('span', v.size ?? '…');
             listItemSize.setAttribute('role', 'status');
-            listItemLink.innerHTML = v.name + (v.is.file ? '.' + v.x : "");
+            if (v.is.folder) {
+                folderSizeViews[v.route] = listItemSize;
+            }
+            listItemLink.innerHTML = v.name + (v.is.file && v.x ? '.' + v.x : "");
             if ('..' === v.name) {
                 listItemLink.title = 'Go to parent';
             }
@@ -269,129 +415,14 @@ function displayLotItems(path, query, hash) {
             listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
             listItems.append(listItem);
         });
-        onAfterDisplay();
+        onAfterView();
     }).catch(console.error);
-}
-
-function displayFormUser(status) {
-    document.title = 'Application · Enter';
-    const key = createElement('input');
-    const keyParent = createElement('p');
-    const pass = createElement('input');
-    const passParent = createElement('p');
-    const peer = createElement('input');
-    const task = createElement('button');
-    const taskParent = createElement('p');
-    key.name = 'key';
-    key.placeholder = 'User';
-    key.type = 'text';
-    pass.name = 'pass';
-    pass.placeholder = 'Pass';
-    pass.type = 'password';
-    peer.name = 'peer';
-    peer.type = 'hidden';
-    peer.value = 'YOUR_APPLICATION_ID';
-    task.innerHTML = '🔓 Enter';
-    task.type = 'submit';
-    keyParent.append(key);
-    passParent.append(pass);
-    taskParent.append(task);
-    taskParent.setAttribute('role', 'group');
-    form.user.replaceChildren(keyParent, passParent, taskParent, peer);
-    view.replaceChildren(form.user);
-    key.focus();
-    if (-1 === status && !localStorage.getItem('jwt')) {
-        const description = createElement('p');
-        description.innerHTML = 'Logged out.';
-        description.setAttribute('role', 'alert');
-        view.prepend(description);
-    }
-}
-
-function onAfterDisplay() {
-    const bar = createElement('p');
-    // Folder navigation
-    const changeOptions = createElement('select');
-    changeOptions.addEventListener('change', function (e) {
-        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
-        display();
-        e.preventDefault();
-    });
-    Object.entries({
-        asset: 'Asset',
-        cache: 'Cache',
-        comment: 'Comment',
-        page: 'Page',
-        tag: 'Tag',
-        trash: 'Trash',
-        user: 'User',
-        x: 'Extension',
-        y: 'Layout'
-
-    }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
-        const changeOption = createElement('option');
-        changeOption.textContent = '📁 ' + v[1];
-        changeOption.value = v[0];
-        changeOptions.append(changeOption);
-    });
-    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
-    // Exit link
-    const exit = createElement('button');
-    exit.addEventListener('click', function (e) {
-        localStorage.removeItem('jwt');
-        localStorage.removeItem('user');
-        window.history.pushState({}, "", sub + '/user');
-        display(-1);
-        e.preventDefault();
-    });
-    exit.innerHTML = '🔒 Exit';
-    bar.append(changeOptions, exit);
-    bar.style.display = 'flex';
-    bar.style.justifyContent = 'space-between';
-    bar.style.marginTop = 0;
-    view.prepend(bar);
-    // if (1 === query._status) {
-    //     const description = createElement('p');
-    //     description.innerHTML = 'Logged in.';
-    //     description.setAttribute('role', 'alert');
-    //     view.prepend(description);
-    // }
-}
-
-function onClickAnchor(e) {
-    window.history.pushState({}, "", this.href);
-    display();
-    e.preventDefault();
-}
-
-function openBlob(path, query, hash) {
-    request(path, 'GET').then(r => {
-        if (!r.ok) {
-            throw new Error('Request failed.');
-        }
-        return r.blob();
-    }).then(blob => {
-        let v = URL.createObjectURL(blob);
-        window.open(v, '_blank');
-        setTimeout(() => URL.revokeObjectURL(v), 1000);
-    }).catch(console.error);
-}
-
-function request(path, method = 'GET', headers = {}, body = "") {
-    const jwt = localStorage.getItem('jwt');
-    headers = Object.assign({
-        'authorization': 'bearer ' + jwt,
-        'content-type': 'application/json'
-    }, headers);
-    return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
 }
 
 if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location.search) {} else {
     window.history.pushState({}, "", sub + '/user');
 }
 
-display();
-
-window.addEventListener('popstate', display);
+window.addEventListener('popstate', view), view();
 
 // })();

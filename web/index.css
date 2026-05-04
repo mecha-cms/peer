@@ -1,9 +1,120 @@
+*,
+::after,
+::before {
+  background: 0 0;
+  border: 0;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  text-align: inherit;
+  text-decoration: none;
+  word-wrap: break-word;
+}
+
 :root {
   background: #ccc;
   color: #000;
-  font: normal normal 16px/1.5 serif, 'Noto Color Emoji';
+  font: 400 normal 16px/1.5 serif, 'Noto Color Emoji';
   margin: 0;
-  padding: 4em;
+  padding: 2rem;
+}
+
+:where(address,
+  article,
+  aside,
+  blockquote,
+  dd,
+  details,
+  div,
+  dl,
+  dt,
+  fieldset,
+  figure,
+  footer,
+  form,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  header,
+  hgroup,
+  hr,
+  main,
+  nav,
+  ol,
+  p,
+  pre,
+  search,
+  section,
+  table,
+  ul) + :where(address,
+  article,
+  aside,
+  blockquote,
+  dd,
+  details,
+  div,
+  dl,
+  dt,
+  fieldset,
+  figure,
+  footer,
+  form,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  header,
+  hgroup,
+  hr,
+  main,
+  nav,
+  ol,
+  p,
+  pre,
+  search,
+  section,
+  table,
+  ul) {
+  margin-top: 1rem;
+}
+
+li:where(:not(:first-child)) > :where(address,
+  article,
+  aside,
+  blockquote,
+  dd,
+  details,
+  div,
+  dl,
+  dt,
+  fieldset,
+  figure,
+  footer,
+  form,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  header,
+  hgroup,
+  hr,
+  main,
+  nav,
+  p,
+  pre,
+  search,
+  section,
+  table):where(:first-child) {
+  margin-top: 1rem;
 }
 
 a {
@@ -21,6 +132,116 @@ body {
   text-align: center;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+dt,
+b,
+kbd,
+legend,
+strong,
+th {
+  font-weight: bold;
+}
+
+dfn,
+em,
+i,
+var {
+  font-style: italic;
+}
+
+del,
+s {
+  text-decoration: line-through;
+}
+
+small,
+sub,
+sup {
+  font-size: 0.8em;
+}
+
+ins,
+u {
+  text-decoration: underline;
+}
+
+abbr {
+  cursor: help;
+}
+
+code {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.8em;
+}
+
+details:open > summary {
+  margin-bottom: 1rem;
+}
+
+dl {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+/* <https://www.modularscale.com/?16&px&1.25> */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+dt {
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 3.815em;
+}
+
+h2 {
+  font-size: 3.052em;
+}
+
+h3 {
+  font-size: 2.441em;
+}
+
+h4 {
+  font-size: 1.953em;
+}
+
+h5 {
+  font-size: 1.563em;
+}
+
+h6,
+dt {
+  font-size: 1.25em;
+}
+
+ol,
+ul {
+  margin-left: 2rem;
+}
+
+ol ol,
+ol ul,
+ul ol,
+ul ul {
+  margin-left: 1rem;
+}
+
+fieldset {
+  border: 1px solid #000;
+  padding: 1rem;
+}
+
 :where(button, input, select, textarea) {
   appearance: none;
   background: #fff;
@@ -29,8 +250,8 @@ body {
   display: inline-block;
   font: inherit;
   margin: 0;
-  padding: 0.25em 0.5em;
-  width: 12em;
+  padding: 0.25rem 0.5rem;
+  width: 12rem;
 }
 
 :where(button) {
@@ -53,46 +274,46 @@ body {
 :where(select),
 :where(select):where(:active, :focus, :hover) {
   background-image: url('data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2020%2020%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpolyline%20fill%3D%22none%22%20points%3D%224%2C7%2010%2C13%2016%2C7%22%20stroke%3D%22%23000%22%20stroke-linecap%3D%22butt%22%20stroke-linejoin%3D%22miter%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E');
-  background-position: right 0.5em center;
+  background-position: right 0.5rem center;
   background-repeat: no-repeat;
-  background-size: 1em;
+  background-size: 1rem;
 }
 
-h1 {
-  margin: 0;
-}
-
-h1 + ul {
+h2 + ul {
   display: block;
   list-style: none;
   margin-left: 0;
   margin-right: 0;
-  margin-top: 0;
   padding: 0;
 }
 
-h1 + ul > li {
+h2 + ul > li {
   display: flex;
-  gap: 0.5em;
+  gap: 0.5rem;
   list-style: none;
   margin: 0;
-  padding: 0.25em 0.75em;
+  padding: 0.25rem 0.75rem;
 }
 
-h1 + ul > li > a:first-child {
+h2 + ul > li > a:first-child {
   margin-right: auto;
 }
 
-h1 + ul > li:hover {
+h2 + ul > li:hover {
   background: rgb(0 0 255 / 0.05);
 }
 
-h1 + ul > li:focus-within {
+h2 + ul > li:focus-within {
   background: rgb(0 0 255 / 0.10);
 }
 
-h1 + ul > li:focus-within:hover {
+h2 + ul > li:focus-within:hover {
   background: rgb(0 0 255 / 0.15);
+}
+
+h2 [role='status'] {
+  font-size: 60%;
+  font-weight: 400;
 }
 
 textarea {
@@ -112,11 +333,14 @@ textarea {
 }
 
 [role='alert'] {
+  background: rgb(255 0 0 / 0.15);
   color: #f00;
+  padding: 0.5rem 1rem;
 }
 
-[role='alert']:first-child {
-  margin-top: 0;
+[aria-live='polite'][role='alert'] {
+  background: rgb(0 153 0 / 0.15);
+  color: #090;
 }
 
 [role='application'] {
@@ -124,7 +348,7 @@ textarea {
   border: 1px solid #000;
   display: block;
   margin: 0 auto;
-  padding: 2em;
+  padding: 1rem;
   text-align: left;
 }
 
