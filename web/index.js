@@ -43,9 +43,9 @@ form.user.addEventListener('submit', function (e) {
             this.prepend(formAlert);
             return;
         }
-        // For a more secure application, you may need to store the token data some-where else with encryption and/or
-        // similar method(s). This practice is only for demonstration and educational purpose(s).
-        localStorage.setItem('jwt', r.token);
+        // For a more secure application, you may need to store the hub token data some-where else with encryption
+        // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
+        localStorage.setItem('hub', r.data.hub);
         localStorage.setItem('user', r.user);
         window.history.pushState({}, "", sub + '/lot/asset?chunk=20&part=1');
         view(1);
@@ -92,9 +92,9 @@ function createTracesFromString(path) {
 }
 
 function f3h(path, method = 'GET', headers = {}, body = "") {
-    const jwt = localStorage.getItem('jwt');
+    const token = localStorage.getItem('hub');
     headers = Object.assign({
-        'authorization': 'bearer ' + jwt,
+        'authorization': 'bearer ' + token,
         'content-type': 'application/json'
     }, headers);
     return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
@@ -129,9 +129,9 @@ function onAfterView() {
     // Exit link
     const exit = createElement('button');
     exit.addEventListener('click', function (e) {
-        localStorage.removeItem('jwt');
+        localStorage.removeItem('hub');
         localStorage.removeItem('user');
-        window.history.pushState({}, "", sub + '/user');
+        window.history.pushState({}, "", sub + '/enter');
         view(-1);
         e.preventDefault();
     });
@@ -150,9 +150,9 @@ function onAfterView() {
     for (let route in folderSizeViews) {
         (() => {
             let listItemSize = folderSizeViews[route];
-            f3h(hub + '/%2B/folder.size' + route.slice(4)).then(r => r.json()).then(r => {
+            f3h(hub + '/%2B/size' + route).then(r => r.json()).then(r => {
                 if (200 === r.status) {
-                    listItemSize.innerHTML = r.value;
+                    listItemSize.innerHTML = r.data.size;
                 }
             });
         })();
@@ -166,7 +166,7 @@ function onClickAnchor(e) {
 }
 
 function openBlob(path, query, hash) {
-    f3h(path, 'GET').then(r => {
+    f3h(path).then(r => {
         if (!r.ok) {
             throw new Error('Request failed.');
         }
@@ -182,8 +182,8 @@ function view(status) {
     const hash = window.location.hash;
     const path = window.location.pathname.slice(sub.length);
     const query = Object.fromEntries(new URLSearchParams(window.location.search));
-    if ('/user' === path) {
-        if (localStorage.getItem('jwt')) {
+    if ('/enter' === path) {
+        if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
             viewFormUser(status);
         } else {
@@ -222,7 +222,7 @@ function viewFormUser(status) {
     form.user.replaceChildren(keyParent, passParent, taskParent, peer);
     application.replaceChildren(form.user);
     key.focus();
-    if (-1 === status && !localStorage.getItem('jwt')) {
+    if (-1 === status && !localStorage.getItem('hub')) {
         const description = createElement('p');
         description.innerHTML = 'Logged out.';
         description.setAttribute('aria-live', 'polite');
@@ -234,16 +234,17 @@ function viewFormUser(status) {
 function viewLotItem(path, query, hash) {
     const description = createElement('p');
     const itemContent = createElement('pre');
+    const itemContentContent = createElement('code');
     const itemTitle = createElement('h2');
     description.setAttribute('role', 'alert');
     document.title = 'Loading…';
-    f3h(hub + '/get/data' + path.slice(4)).then(r => r.json()).then(r => {
+    f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('jwt');
+            localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            window.history.pushState({}, "", sub + '/user');
+            window.history.pushState({}, "", sub + '/enter');
             view();
             return;
         }
@@ -255,17 +256,26 @@ function viewLotItem(path, query, hash) {
             return;
         }
         document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
-        itemContent.style.fontFamily = 'monospace'; // TODO
-        itemContent.textContent = JSON.stringify(r, null, 2);
+        if (r.is.text) {
+            itemContentContent.textContent = 'Loading…';
+            f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
+                if (200 === r.status) {
+                    itemContentContent.textContent = r.data.content;
+                }
+            });
+        } else {
+            itemContentContent.textContent = JSON.stringify(r, null, 2);
+        }
         itemTitle.append('📂', ' ', createTracesFromString('.' + path));
         // let folderSizeCurrent = createElement('span', '…');
         // folderSizeCurrent.setAttribute('role', 'status');
         // itemTitle.append(' ', folderSizeCurrent);
-        // f3h(hub + '/%2B/folder.size' + r.data.parent.route.slice(4)).then(r => r.json()).then(r => {
+        // f3h(hub + '/%2B/size' + r.data.parent.route).then(r => r.json()).then(r => {
         //     if (200 === r.status) {
-        //         folderSizeCurrent.innerHTML = r.value;
+        //         folderSizeCurrent.innerHTML = r.data.size;
         //     }
         // });
+        itemContent.append(itemContentContent);
         application.replaceChildren(itemTitle, itemContent);
         onAfterView();
     }).catch(console.error);
@@ -287,13 +297,13 @@ function viewLotItems(path, query, hash) {
     listNavLinkPrev.innerHTML = '⬅️';
     listNavLinkPrev.title = 'Go to the previous page';
     document.title = 'Loading…';
-    f3h(hub + '/get/data' + path.slice(4) + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
+    f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('jwt');
+            localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            window.history.pushState({}, "", sub + '/user');
+            window.history.pushState({}, "", sub + '/enter');
             view();
             return;
         }
@@ -333,9 +343,9 @@ function viewLotItems(path, query, hash) {
         //     let folderSizeCurrent = createElement('span', '…');
         //     folderSizeCurrent.setAttribute('role', 'status');
         //     listTitle.append(' ', folderSizeCurrent);
-        //     f3h(hub + '/%2B/folder.size' + path.slice(4)).then(r => r.json()).then(r => {
+        //     f3h(hub + '/%2B/size' + path).then(r => r.json()).then(r => {
         //         if (200 === r.status) {
-        //             folderSizeCurrent.innerHTML = r.value;
+        //             folderSizeCurrent.innerHTML = r.data.size;
         //         }
         //     });
         // }
@@ -369,7 +379,7 @@ function viewLotItems(path, query, hash) {
                     openBlob(this.href);
                     e.preventDefault();
                 });
-                listItemLink.href = hub + '/get/blob' + v.route.slice(4);
+                listItemLink.href = hub + '/blob' + v.route;
             } else {
                 listItemLink.addEventListener('click', onClickAnchor);
                 listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
@@ -420,7 +430,7 @@ function viewLotItems(path, query, hash) {
 }
 
 if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location.search) {} else {
-    window.history.pushState({}, "", sub + '/user');
+    window.history.pushState({}, "", sub + '/enter');
 }
 
 window.addEventListener('popstate', view), view();
