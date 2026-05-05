@@ -103,7 +103,7 @@ function f3h(path, method = 'GET', headers = {}, body = "") {
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const s = createElement('script');
-        s.async = true;
+        s.async = false;
         s.onerror = () => reject(new Error('Failed to load ' + src));
         s.onload = resolve;
         s.src = src;
@@ -122,24 +122,29 @@ function loadCSS(href) {
     });
 }
 
+let wasLoadCodeMirror5 = false;
 function loadCodeMirror5() {
-    if (window.CodeMirror) {
+    if (wasLoadCodeMirror5) {
         return Promise.resolve(window.CodeMirror);
     }
     const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
     return Promise.all([
         loadCSS(base + '/codemirror.min.css'),
         loadScript(base + '/codemirror.min.js'),
+
         loadScript(base + '/mode/clike/clike.min.js'),
         loadScript(base + '/mode/css/css.min.js'),
-        loadScript(base + '/mode/htmlmixed/htmlmixed.min.js'),
         loadScript(base + '/mode/javascript/javascript.min.js'),
+        loadScript(base + '/mode/xml/xml.min.js'),
+
+        loadScript(base + '/mode/htmlmixed/htmlmixed.min.js'),
+        loadScript(base + '/mode/php/php.min.js'),
+
         loadScript(base + '/mode/markdown/markdown.min.js'),
         loadScript(base + '/mode/nginx/nginx.min.js'),
-        loadScript(base + '/mode/php/php.min.js'),
-        loadScript(base + '/mode/xml/xml.min.js'),
-        loadScript(base + '/mode/yaml/yaml.min.js'),
+        loadScript(base + '/mode/yaml/yaml.min.js')
     ]).then(() => {
+        wasLoadCodeMirror5 = true;
         if (!window.CodeMirror) throw new Error('Error loading `CodeMirror` library!');
         return window.CodeMirror;
     });
@@ -375,7 +380,10 @@ function viewItemTextEditor(path, query, hash) {
             onAfterView();
             return;
         }
-        const codeMirrorMode = r.data.type;
+        let codeMirrorMode = r.data.type;
+        if ('text/x-php' === codeMirrorMode) {
+            codeMirrorMode = 'application/x-httpd-php';
+        }
         const form = viewFormFile();
         form.elements.content.parentNode.style.display = 'none';
         form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
@@ -397,6 +405,7 @@ function viewItemTextEditor(path, query, hash) {
                             mode: codeMirrorMode,
                             viewportMargin: Infinity
                         });
+                        console.log(codeMirrorMode);
                         form && form.addEventListener('submit', () => cm.save());
                         cm.refresh();
                     }).catch(e => {
