@@ -246,13 +246,13 @@ pre code {
   background: #eee;
   display: block;
   overflow: auto;
-  padding: 0.5em 1em;
+  padding: 0.5rem 1rem;
   white-space: pre-wrap;
 }
 
 :where(button, input, select, textarea) {
   appearance: none;
-  background: #fff;
+  background: #ffc;
   border: 1px solid #000;
   color: #000;
   display: inline-block;
@@ -285,6 +285,12 @@ pre code {
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1rem;
+}
+
+:where(textarea) {
+  font-family: monospace;
+  resize: vertical;
+  width: 100%;
 }
 
 h2 + ul {
@@ -324,11 +330,6 @@ h2 [role='status'] {
   font-weight: 400;
 }
 
-textarea {
-  resize: vertical;
-  width: 100%;
-}
-
 [aria-current] {
   color: inherit;
   cursor: default;
@@ -356,6 +357,7 @@ textarea {
   border: 1px solid #000;
   display: block;
   margin: 0 auto;
+  max-width: 65rem;
   padding: 1rem;
   text-align: left;
 }
@@ -365,6 +367,26 @@ textarea {
   margin: 0 auto;
 }
 
+[role='group'] {
+  display: flex;
+  gap: 0.5em;
+}
+
 [role='status'] {
   color: #888;
+}
+
+
+/* Overrides */
+form .CodeMirror {
+  border: 1px solid #000;
+  cursor: text;
+  font-size: 80%;
+  height: auto;
+  line-height: 1;
+  min-height: 1em;
+}
+
+form .CodeMirror * + div {
+  margin-top: 0;
 }

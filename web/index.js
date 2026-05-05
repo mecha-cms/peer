@@ -100,6 +100,51 @@ function f3h(path, method = 'GET', headers = {}, body = "") {
     return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
 }
 
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = createElement('script');
+        s.async = true;
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        s.onload = resolve;
+        s.src = src;
+        document.head.appendChild(s);
+    });
+}
+
+function loadCSS(href) {
+    return new Promise((resolve, reject) => {
+        const l = createElement('link');
+        l.href = href;
+        l.onerror = () => reject(new Error('Failed to load ' + href));
+        l.onload = resolve;
+        l.rel = 'stylesheet';
+        document.head.appendChild(l);
+    });
+}
+
+function loadCodeMirror5() {
+    if (window.CodeMirror) {
+        return Promise.resolve(window.CodeMirror);
+    }
+    const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
+    return Promise.all([
+        loadCSS(base + '/codemirror.min.css'),
+        loadScript(base + '/codemirror.min.js'),
+        loadScript(base + '/mode/clike/clike.min.js'),
+        loadScript(base + '/mode/css/css.min.js'),
+        loadScript(base + '/mode/htmlmixed/htmlmixed.min.js'),
+        loadScript(base + '/mode/javascript/javascript.min.js'),
+        loadScript(base + '/mode/markdown/markdown.min.js'),
+        loadScript(base + '/mode/nginx/nginx.min.js'),
+        loadScript(base + '/mode/php/php.min.js'),
+        loadScript(base + '/mode/xml/xml.min.js'),
+        loadScript(base + '/mode/yaml/yaml.min.js'),
+    ]).then(() => {
+        if (!window.CodeMirror) throw new Error('Error loading `CodeMirror` library!');
+        return window.CodeMirror;
+    });
+}
+
 function onAfterView() {
     const bar = createElement('p');
     // Folder navigation
@@ -120,12 +165,20 @@ function onAfterView() {
         x: 'Extension',
         y: 'Layout'
     }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
-        const changeOption = createElement('option');
-        changeOption.textContent = '📁 ' + v[1];
+        const changeOption = createElement('option', '📁 ' + v[1]);
         changeOption.value = v[0];
         changeOptions.append(changeOption);
     });
-    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || 'asset';
+    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || "";
+    if ("" === changeOptions.value) {
+        const changeOption = createElement('option', '🏠 Home');
+        const changeOptionCurrent = createElement('option', '⛔ System');
+        changeOption.value = 'asset';
+        changeOptionCurrent.disabled = true;
+        changeOptionCurrent.value = "";
+        changeOptions.replaceChildren(changeOptionCurrent, changeOption);
+        changeOptions.value = "";
+    }
     // Exit link
     const exit = createElement('button');
     exit.addEventListener('click', function (e) {
@@ -191,8 +244,35 @@ function view(status) {
         }
     } else {
         query._status = status;
-        query.part ? viewLotItems(path, query, hash) : viewLotItem(path, query, hash);
+        query.part ? viewItems(path, query, hash) : viewItem(path, query, hash);
     }
+}
+
+function viewFormFile(path, query, hash) {
+    document.title = 'Application · File Editor';
+    const content = createElement('textarea');
+    const contentParent = createElement('div');
+    const name = createElement('input');
+    const taskDelete = createElement('button');
+    const taskParent = createElement('p');
+    const taskSave = createElement('button');
+    content.name = 'content';
+    content.placeholder = 'Content goes here…';
+    name.name = 'name';
+    name.placeholder = 'name.txt';
+    name.style.flex = 1;
+    name.type = 'text';
+    taskDelete.innerHTML = 'Delete';
+    taskDelete.type = 'button';
+    taskSave.innerHTML = 'Save';
+    taskSave.type = 'submit';
+    contentParent.append(content);
+    taskParent.append(name, ' ', taskSave, ' ', taskDelete);
+    taskParent.setAttribute('role', 'group');
+    form.file.replaceChildren(contentParent, taskParent);
+    application.replaceChildren(form.file);
+    content.focus();
+    return form.file;
 }
 
 function viewFormUser(status) {
@@ -229,9 +309,10 @@ function viewFormUser(status) {
         description.setAttribute('role', 'alert');
         application.prepend(description);
     }
+    return form.user;
 }
 
-function viewLotItem(path, query, hash) {
+function viewItem(path, query, hash) {
     const description = createElement('p');
     const itemContent = createElement('pre');
     const itemContentContent = createElement('code');
@@ -256,6 +337,9 @@ function viewLotItem(path, query, hash) {
             return;
         }
         document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
+        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
+        itemContent.append(itemContentContent);
+        application.replaceChildren(itemTitle, itemContent);
         if (r.is.text) {
             itemContentContent.textContent = 'Loading…';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
@@ -266,22 +350,67 @@ function viewLotItem(path, query, hash) {
         } else {
             itemContentContent.textContent = JSON.stringify(r, null, 2);
         }
-        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
-        // let folderSizeCurrent = createElement('span', '…');
-        // folderSizeCurrent.setAttribute('role', 'status');
-        // itemTitle.append(' ', folderSizeCurrent);
-        // f3h(hub + '/%2B/size' + r.data.parent.route).then(r => r.json()).then(r => {
-        //     if (200 === r.status) {
-        //         folderSizeCurrent.innerHTML = r.data.size;
-        //     }
-        // });
-        itemContent.append(itemContentContent);
-        application.replaceChildren(itemTitle, itemContent);
         onAfterView();
     }).catch(console.error);
 }
 
-function viewLotItems(path, query, hash) {
+function viewItemTextEditor(path, query, hash) {
+    const itemDescription = createElement('p');
+    const itemTitle = createElement('h2');
+    itemDescription.setAttribute('role', 'alert');
+    f3h(hub + '/at' + path).then(r => r.json()).then(r => {
+        console.log(r);
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            localStorage.removeItem('hub');
+            localStorage.removeItem('user');
+            window.history.pushState({}, "", sub + '/enter');
+            view();
+            return;
+        }
+        if (404 === r.status) {
+            document.title = 'Application · Error';
+            itemDescription.innerHTML = r.description;
+            application.replaceChildren(itemDescription);
+            onAfterView();
+            return;
+        }
+        const codeMirrorMode = r.data.type;
+        const form = viewFormFile();
+        form.elements.content.parentNode.style.display = 'none';
+        form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
+        document.title = 'Loading…';
+        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
+        application.prepend(itemTitle);
+        if (r.is.text) {
+            form.elements.content.parentNode.style.display = "";
+            form.elements.content.style.display = 'none';
+            f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
+                document.title = 'Application · File Editor';
+                if (200 === r.status) {
+                    form.elements.content.value = r.data.content;
+                    loadCodeMirror5().then(CodeMirror => {
+                        const t = form.elements.content;
+                        const cm = CodeMirror.fromTextArea(t, {
+                            lineNumbers: true,
+                            lineWrapping: true,
+                            mode: codeMirrorMode,
+                            viewportMargin: Infinity
+                        });
+                        form && form.addEventListener('submit', () => cm.save());
+                        cm.refresh();
+                    }).catch(e => {
+                        form.elements.content.style.minHeight = 'calc(' + form.elements.content.scrollHeight + 'px + 0.25em)';
+                    });
+                }
+            });
+        } else {
+        }
+        onAfterView();
+    }).catch(console.error);
+}
+
+function viewItems(path, query, hash) {
     const description = createElement('p');
     const listItems = createElement('ul');
     const listNav = createElement('nav');
@@ -314,7 +443,7 @@ function viewLotItems(path, query, hash) {
             onAfterView();
             return;
         }
-        document.title = 'Application · Folder (.' + path + ')';
+        document.title = 'Application · Folder';
         let parent = r.data.parent;
         listNavLinkNext.addEventListener('click', onClickAnchor);
         listNavLinkParent.addEventListener('click', onClickAnchor);
@@ -392,10 +521,11 @@ function viewLotItems(path, query, hash) {
             listItemLinkDelete.innerHTML = '🗑️';
             listItemLinkDelete.title = 'Delete';
             listItemLinkEdit.addEventListener('click', function (e) {
-                alert('Edit');
+                window.history.pushState({}, "", this.getAttribute('href'));
+                viewItemTextEditor(this.getAttribute('href').slice(sub.length));
                 e.preventDefault();
             });
-            listItemLinkEdit.href = '#edit';
+            listItemLinkEdit.href = sub + v.route + '#edit';
             listItemLinkEdit.innerHTML = '📝';
             listItemLinkEdit.title = 'Edit';
             listItemLinkOpen.addEventListener('click', function (e) {
@@ -406,10 +536,10 @@ function viewLotItems(path, query, hash) {
             listItemLinkOpen.innerHTML = '🔍';
             listItemLinkOpen.title = 'Open';
             listItemLinkView.addEventListener('click', function (e) {
-                alert('View');
+                openBlob(this.href);
                 e.preventDefault();
             });
-            listItemLinkView.href = '#view';
+            listItemLinkView.href = hub + '/blob' + v.route;
             listItemLinkView.innerHTML = '👁';
             listItemLinkView.title = 'View';
             listItemLinks.append(listItemLinkEdit, ' ', listItemLinkDelete);
@@ -433,6 +563,9 @@ if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location
     window.history.pushState({}, "", sub + '/enter');
 }
 
-window.addEventListener('popstate', view), view();
+window.addEventListener('hashchange', view);
+window.addEventListener('popstate', view);
+
+view();
 
 // })();
