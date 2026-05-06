@@ -4,9 +4,6 @@ const folderSizeViews = {};
 
 const application = document.querySelector('[role=application]');
 const form = {};
-const formAlert = createElement('p');
-
-formAlert.setAttribute('role', 'alert');
 
 form.blob = createElement('form');
 form.file = createElement('form');
@@ -26,13 +23,15 @@ form.user.addEventListener('submit', function (e) {
     if ('@' !== key[0]) {
         key = '@' + key;
     }
+    const info = createAlert('Logging in…', 'info');
+    this.prepend(info);
     fetch(hub + '/enter', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
         method: 'POST'
     }).then(r => r.json()).then(r => {
         if (200 !== r.status) {
-            formAlert.innerHTML = r.description || 'Unknown error.';
+            updateAlert(info, r.description || 'Unknown error.', 'error');
             this.elements.pass.value = "";
             if (404 === r.status) {
                 this.elements.key.focus();
@@ -40,31 +39,125 @@ form.user.addEventListener('submit', function (e) {
             } else {
                 this.elements.pass.focus();
             }
-            this.prepend(formAlert);
             return;
         }
         // For a more secure application, you may need to store the hub token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
         localStorage.setItem('user', r.user);
-        window.history.pushState({}, "", sub + '/lot/asset?chunk=20&part=1');
-        view(1);
+        updateRoute('/lot/asset?chunk=20&part=1'), view(1);
     }).catch(e => {
-        formAlert.innerHTML = e;
-        this.prepend(formAlert);
+        updateAlert(info, e + "", 'error');
     });
     e.preventDefault();
 });
 
+function createAlert(text, type, element) {
+    return createElement(element || 'p', text, {
+        'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
+        'role': 'alert'
+    });
+}
+
 function createElement(name, content, attributes) {
-    const element = document.createElement(name);
+    return updateElement(document.createElement(name), content, attributes);
+}
+
+function createText(content) {
+    return document.createTextNode(content);
+}
+
+function updateAlert(element, text, type) {
+    return createAlert(text, type, element);
+}
+
+function updateElement(element, content, attributes) {
     if (attributes) {
-        // TODO
+        for (let name in attributes) {
+            let v = attributes[name];
+            if (false === v || null === v) {
+                element.removeAttribute(name);
+            } else {
+                element.setAttribute(name, v);
+            }
+        }
     }
-    if (content) {
+    if ('string' === typeof content) {
         element.innerHTML = content;
     }
     return element;
+}
+
+function updateTitle(text, busy) {
+    document.title = text;
+    updateElement(document.documentElement, false, {
+        'aria-busy': busy ? 'true' : false
+    });
+}
+
+function updateRoute(route) {
+    if ('/' === route[0]) {
+        route = sub + route;
+    }
+    window.history.pushState({}, "", route);
+}
+
+function createPager(current, count, chunk, kin, then, first, previous, next, last) {
+    let start = 1,
+        end = Math.ceil(count / chunk),
+        root = document.createDocumentFragment(),
+        i, min, max;
+    if (end <= 1) {
+        return root;
+    }
+    if (current <= kin + kin) {
+        min = start;
+        max = Math.min(start + kin + kin, end);
+    } else if (current > end - kin - kin) {
+        min = end - kin - kin;
+        max = end;
+    } else {
+        min = current - kin;
+        max = current + kin;
+    }
+    function createDots() {
+        return createElement('span', '…', {
+            'role': 'none'
+        });
+    }
+    function createLink(page, title, rel, isCurrent, isDisabled) {
+        let element = createElement('a', title, {
+            'aria-current': isCurrent ? 'page' : false,
+            'aria-disabled': isDisabled ? 'true' : false,
+            'rel': rel || false
+        });
+        then && then.call(element, page, element, isCurrent, isDisabled);
+        return element;
+    }
+    if (previous) {
+        root.append(createLink(current === start ? start : current - 1, previous, 'prev', false, current === start), createText(' '));
+    }
+    if (first && last) {
+        if (min > start) {
+            root.append(createLink(start, start + "", 'prev', false, false));
+            if (min > start + 1) {
+                root.append(createText(' '), createDots());
+            }
+        }
+        for (i = min; i <= max; ++i) {
+            root.append(createText(' '), createLink(i, i + "", current >= i ? 'prev' : 'next', current === i, false));
+        }
+        if (max < end) {
+            if (max < end - 1) {
+                root.append(createText(' '), createDots());
+            }
+            root.append(createText(' '), createLink(end, end + "", 'next', false, false));
+        }
+    }
+    if (next) {
+        root.append(createText(' '), createLink(current === end ? end : current + 1, next, 'next', false, current === end));
+    }
+    return root;
 }
 
 function createTracesFromString(path) {
@@ -107,7 +200,7 @@ function loadScript(src) {
         s.onerror = () => reject(new Error('Failed to load ' + src));
         s.onload = resolve;
         s.src = src;
-        document.head.appendChild(s);
+        document.head.append(s);
     });
 }
 
@@ -118,7 +211,7 @@ function loadCSS(href) {
         l.onerror = () => reject(new Error('Failed to load ' + href));
         l.onload = resolve;
         l.rel = 'stylesheet';
-        document.head.appendChild(l);
+        document.head.append(l);
     });
 }
 
@@ -131,15 +224,18 @@ function loadCodeMirror5() {
     return Promise.all([
         loadCSS(base + '/codemirror.min.css'),
         loadScript(base + '/codemirror.min.js'),
-
+        // Order #1
+        loadScript(base + '/addon/edit/closebrackets.min.js'),
+        loadScript(base + '/addon/runmode/runmode.min.js'),
+        // Order #2
         loadScript(base + '/mode/clike/clike.min.js'),
         loadScript(base + '/mode/css/css.min.js'),
         loadScript(base + '/mode/javascript/javascript.min.js'),
         loadScript(base + '/mode/xml/xml.min.js'),
-
+        // Order #3
         loadScript(base + '/mode/htmlmixed/htmlmixed.min.js'),
         loadScript(base + '/mode/php/php.min.js'),
-
+        // Order #4
         loadScript(base + '/mode/markdown/markdown.min.js'),
         loadScript(base + '/mode/nginx/nginx.min.js'),
         loadScript(base + '/mode/yaml/yaml.min.js')
@@ -155,8 +251,7 @@ function onAfterView() {
     // Folder navigation
     const changeOptions = createElement('select');
     changeOptions.addEventListener('change', function (e) {
-        window.history.pushState({}, "", sub + '/lot/' + this.value + '?chunk=20&part=1');
-        view();
+        updateRoute('/lot/' + this.value + '?chunk=20&part=1'), view();
         e.preventDefault();
     });
     Object.entries({
@@ -189,8 +284,7 @@ function onAfterView() {
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('hub');
         localStorage.removeItem('user');
-        window.history.pushState({}, "", sub + '/enter');
-        view(-1);
+        updateRoute('/enter'), view(-1);
         e.preventDefault();
     });
     exit.innerHTML = '🔒 Exit';
@@ -208,6 +302,9 @@ function onAfterView() {
     for (let route in folderSizeViews) {
         (() => {
             let listItemSize = folderSizeViews[route];
+            if (!listItemSize.parentNode) {
+                return;
+            }
             f3h(hub + '/%2B/size' + route).then(r => r.json()).then(r => {
                 if (200 === r.status) {
                     listItemSize.innerHTML = r.data.size;
@@ -218,8 +315,7 @@ function onAfterView() {
 }
 
 function onClickAnchor(e) {
-    window.history.pushState({}, "", this.href);
-    view();
+    updateRoute(this.href), view();
     e.preventDefault();
 }
 
@@ -254,7 +350,7 @@ function view(status) {
 }
 
 function viewFormFile(path, query, hash) {
-    document.title = 'Application · File Editor';
+    updateTitle('Application · File Editor');
     const content = createElement('textarea');
     const contentParent = createElement('div');
     const name = createElement('input');
@@ -281,7 +377,7 @@ function viewFormFile(path, query, hash) {
 }
 
 function viewFormUser(status) {
-    document.title = 'Application · Enter';
+    updateTitle('Application · Enter');
     const key = createElement('input');
     const keyParent = createElement('p');
     const pass = createElement('input');
@@ -318,38 +414,46 @@ function viewFormUser(status) {
 }
 
 function viewItem(path, query, hash) {
+    updateTitle('Loading…', true);
     const description = createElement('p');
     const itemContent = createElement('pre');
     const itemContentContent = createElement('code');
     const itemTitle = createElement('h2');
-    description.setAttribute('role', 'alert');
-    document.title = 'Loading…';
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            window.history.pushState({}, "", sub + '/enter');
-            view();
+            updateRoute('/enter'), view();
             return;
         }
         if (404 === r.status) {
-            document.title = 'Application · Error';
+            updateTitle('Application · Error');
             description.innerHTML = r.description;
             application.replaceChildren(description);
             onAfterView();
             return;
         }
-        document.title = 'Application · ' + (r.is.file ? 'File' : 'Folder') + ' (.' + path + ')';
+        let codeMirrorMode = r.data.type;
+        if ('text/x-php' === codeMirrorMode) {
+            codeMirrorMode = 'application/x-httpd-php';
+        } else if ('md' === r.data.x) {
+            codeMirrorMode = 'text/x-markdown';
+        }
+        updateTitle('Application · File Viewer');
         itemTitle.append('📂', ' ', createTracesFromString('.' + path));
         itemContent.append(itemContentContent);
         application.replaceChildren(itemTitle, itemContent);
         if (r.is.text) {
-            itemContentContent.textContent = 'Loading…';
+            itemContentContent.textContent = 'Loading content…';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
+                    itemContentContent.classList.add('cm-s', 'cm-s-default');
                     itemContentContent.textContent = r.data.content;
+                    loadCodeMirror5().then(CodeMirror => {
+                        CodeMirror.runMode(r.data.content, codeMirrorMode, itemContentContent);
+                    }).catch(console.error);
                 }
             });
         } else {
@@ -360,6 +464,7 @@ function viewItem(path, query, hash) {
 }
 
 function viewItemTextEditor(path, query, hash) {
+    updateTitle('Loading…', true);
     const itemDescription = createElement('p');
     const itemTitle = createElement('h2');
     itemDescription.setAttribute('role', 'alert');
@@ -369,12 +474,11 @@ function viewItemTextEditor(path, query, hash) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            window.history.pushState({}, "", sub + '/enter');
-            view();
+            updateRoute('/enter'), view();
             return;
         }
         if (404 === r.status) {
-            document.title = 'Application · Error';
+            updateTitle('Application · Error');
             itemDescription.innerHTML = r.description;
             application.replaceChildren(itemDescription);
             onAfterView();
@@ -383,110 +487,78 @@ function viewItemTextEditor(path, query, hash) {
         let codeMirrorMode = r.data.type;
         if ('text/x-php' === codeMirrorMode) {
             codeMirrorMode = 'application/x-httpd-php';
+        } else if ('md' === r.data.x) {
+            codeMirrorMode = 'text/x-markdown';
         }
         const form = viewFormFile();
-        form.elements.content.parentNode.style.display = 'none';
+        form.elements.content.parentNode.style.display = r.is.text ? "" : 'none';
         form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
-        document.title = 'Loading…';
         itemTitle.append('📂', ' ', createTracesFromString('.' + path));
         application.prepend(itemTitle);
         if (r.is.text) {
-            form.elements.content.parentNode.style.display = "";
+            let info = createAlert('Loading CodeMirror library…', 'info');
+            form.elements.content.parentNode.append(info);
             form.elements.content.style.display = 'none';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
-                document.title = 'Application · File Editor';
+                updateTitle('Application · File Editor');
                 if (200 === r.status) {
                     form.elements.content.value = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
                         const t = form.elements.content;
                         const cm = CodeMirror.fromTextArea(t, {
+                            autoCloseBrackets: true,
                             lineNumbers: true,
-                            lineWrapping: true,
+                            lineWrapping: false,
                             mode: codeMirrorMode,
                             viewportMargin: Infinity
                         });
-                        console.log(codeMirrorMode);
                         form && form.addEventListener('submit', () => cm.save());
                         cm.refresh();
                     }).catch(e => {
                         form.elements.content.style.minHeight = 'calc(' + form.elements.content.scrollHeight + 'px + 0.25em)';
                     });
+                    info.remove();
+                } else {
+                    updateAlert(info, r.description, 'error');
                 }
             });
-        } else {
-        }
+        } else {}
         onAfterView();
     }).catch(console.error);
 }
 
 function viewItems(path, query, hash) {
+    updateTitle('Loading…', true);
     const description = createElement('p');
     const listItems = createElement('ul');
-    const listNav = createElement('nav');
-    const listNavLinkNext = createElement('a');
-    const listNavLinkParent = createElement('a');
-    const listNavLinkPrev = createElement('a');
+    const listNav = createElement('nav', "", {
+        'aria-label': 'Pagination'
+    });
     const listTitle = createElement('h2');
     description.setAttribute('role', 'alert');
-    listNavLinkNext.innerHTML = '➡️';
-    listNavLinkNext.title = 'Go to the next page';
-    listNavLinkParent.innerHTML = '⬆️';
-    listNavLinkParent.title = 'Go to parent';
-    listNavLinkPrev.innerHTML = '⬅️';
-    listNavLinkPrev.title = 'Go to the previous page';
-    document.title = 'Loading…';
     f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            window.history.pushState({}, "", sub + '/enter');
-            view();
+            updateRoute('/enter'), view();
             return;
         }
         if (404 === r.status) {
-            document.title = 'Application · Error';
+            updateTitle('Application · Error');
             description.innerHTML = r.description;
             application.replaceChildren(description);
             onAfterView();
             return;
         }
-        document.title = 'Application · Folder';
+        updateTitle('Application · Folder');
         let parent = r.data.parent;
-        listNavLinkNext.addEventListener('click', onClickAnchor);
-        listNavLinkParent.addEventListener('click', onClickAnchor);
-        listNavLinkPrev.addEventListener('click', onClickAnchor);
-        listNavLinkNext.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part + 1);
-        listNavLinkParent.href = parent ? sub + parent.route + '?chunk=' + r.query.chunk + '&part=1' : "";
-        listNavLinkPrev.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + (r.query.part - 1);
-        if (r.has.next) {
-            listNavLinkNext.removeAttribute('aria-disabled');
-        } else {
-            listNavLinkNext.setAttribute('aria-disabled', 'true');
-        }
-        if (r.has.parent) {
-            listNavLinkParent.removeAttribute('aria-disabled');
-        } else {
-            listNavLinkParent.setAttribute('aria-disabled', 'true');
-        }
-        if (r.has.prev) {
-            listNavLinkPrev.removeAttribute('aria-disabled');
-        } else {
-            listNavLinkPrev.setAttribute('aria-disabled', 'true');
-        }
-        listNav.append(listNavLinkPrev, ' ', listNavLinkParent, ' ', listNavLinkNext);
+        listNav.append(createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part) {
+            this.addEventListener('click', onClickAnchor);
+            this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
+        }, 'First', 'Previous', 'Next', 'Last'));
         listTitle.append('📂', ' ', createTracesFromString('.' + path));
-        // if (r.has.parent) {
-        //     let folderSizeCurrent = createElement('span', '…');
-        //     folderSizeCurrent.setAttribute('role', 'status');
-        //     listTitle.append(' ', folderSizeCurrent);
-        //     f3h(hub + '/%2B/size' + path).then(r => r.json()).then(r => {
-        //         if (200 === r.status) {
-        //             folderSizeCurrent.innerHTML = r.data.size;
-        //         }
-        //     });
-        // }
         application.replaceChildren(listTitle, listItems);
         if (r.has.next || r.has.prev) {
             application.append(listNav);
@@ -530,8 +602,8 @@ function viewItems(path, query, hash) {
             listItemLinkDelete.innerHTML = '🗑️';
             listItemLinkDelete.title = 'Delete';
             listItemLinkEdit.addEventListener('click', function (e) {
-                window.history.pushState({}, "", this.getAttribute('href'));
-                viewItemTextEditor(this.getAttribute('href').slice(sub.length));
+                let route = this.getAttribute('href').slice(sub.length);
+                updateRoute(route), viewItemTextEditor(route);
                 e.preventDefault();
             });
             listItemLinkEdit.href = sub + v.route + '#edit';
@@ -544,23 +616,21 @@ function viewItems(path, query, hash) {
             listItemLinkOpen.href = listItemLink.href;
             listItemLinkOpen.innerHTML = '🔍';
             listItemLinkOpen.title = 'Open';
-            listItemLinkView.addEventListener('click', function (e) {
+            listItemLinkView.addEventListener('click', v.is.blob ? function (e) {
                 openBlob(this.href);
+                e.preventDefault();
+            } : function (e) {
+                listItemLink.click();
                 e.preventDefault();
             });
             listItemLinkView.href = hub + '/blob' + v.route;
             listItemLinkView.innerHTML = '👁';
             listItemLinkView.title = 'View';
-            listItemLinks.append(listItemLinkEdit, ' ', listItemLinkDelete);
+            listItemLinks.append(v.is.folder ? listItemLinkOpen : listItemLinkView, ' ', listItemLinkEdit, ' ', listItemLinkDelete);
             listItemLinks.style.display = 'flex';
             listItemLinks.style.gap = '0.5em';
             listItemLinks.style.justifyContent = 'end';
             listItemLinks.style.minWidth = '5em';
-            if (v.is.blob) {
-                listItemLinks.prepend(listItemLinkView, ' ');
-            } else if (v.is.folder) {
-                listItemLinks.prepend(listItemLinkOpen, ' ');
-            }
             listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
             listItems.append(listItem);
         });
@@ -569,7 +639,7 @@ function viewItems(path, query, hash) {
 }
 
 if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location.search) {} else {
-    window.history.pushState({}, "", sub + '/enter');
+    updateRoute('/enter');
 }
 
 window.addEventListener('hashchange', view);

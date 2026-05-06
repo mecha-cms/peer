@@ -246,7 +246,7 @@ pre code {
   background: #eee;
   display: block;
   overflow: auto;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
   white-space: pre-wrap;
 }
 
@@ -342,14 +342,49 @@ h2 [role='status'] {
 }
 
 [role='alert'] {
-  background: rgb(255 0 0 / 0.15);
-  color: #f00;
+  background: rgb(0 0 0 / 0.15);
   padding: 0.5rem 1rem;
 }
 
+[aria-busy] {
+  cursor: wait;
+}
+
+[aria-busy] [role='application'] > * {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+[aria-label='Pagination'] {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+[aria-label='Pagination'] [rel='next']:last-child {
+  margin-left: 0.5rem;
+}
+
+[aria-label='Pagination'] [rel='prev']:first-child {
+  margin-right: 0.5rem;
+}
+
+/* Alert error */
+[aria-live='assertive'][role='alert'] {
+  background: rgb(255 0 0 / 0.15);
+  color: #f00;
+}
+
+/* Alert info */
+[aria-live='off'][role='alert'] {
+  background: rgb(0 0 255 / 0.15);
+  color: #00f;
+}
+
+/* Alert success */
 [aria-live='polite'][role='alert'] {
-  background: rgb(0 153 0 / 0.15);
-  color: #090;
+  background: rgb(0 136 0 / 0.15);
+  color: #080;
 }
 
 [role='application'] {
@@ -378,12 +413,16 @@ h2 [role='status'] {
 
 
 /* Overrides */
+code.cm-s {
+  background: #fafafa;
+}
+
 form .CodeMirror {
   border: 1px solid #000;
   cursor: text;
   font-size: 80%;
   height: auto;
-  line-height: 1;
+  line-height: 1.1;
   min-height: 1em;
 }
 
