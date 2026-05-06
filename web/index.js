@@ -302,8 +302,8 @@ function onAfterView() {
     for (let route in folderSizeViews) {
         (() => {
             let listItemSize = folderSizeViews[route];
-            if (!listItemSize.offsetWidth) {
-                return;
+            if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
+                return; // Hidden from view
             }
             f3h(hub + '/%2B/size' + route).then(r => r.json()).then(r => {
                 if (200 === r.status) {
@@ -485,6 +485,7 @@ function viewItemTextEditor(path, query, hash) {
             return;
         }
         let codeMirrorMode = r.data.type;
+        console.log(r.data.type);
         if ('text/x-php' === codeMirrorMode) {
             codeMirrorMode = 'application/x-httpd-php';
         } else if ('md' === r.data.x) {
