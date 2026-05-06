@@ -1,9 +1,9 @@
 // (() => {
 
-const folderSizeViews = {};
-
 const application = document.querySelector('[role=application]');
 const form = {};
+
+let folderSizeViews = {};
 
 form.blob = createElement('form');
 form.file = createElement('form');
@@ -302,7 +302,7 @@ function onAfterView() {
     for (let route in folderSizeViews) {
         (() => {
             let listItemSize = folderSizeViews[route];
-            if (!listItemSize.parentNode) {
+            if (!listItemSize.offsetWidth) {
                 return;
             }
             f3h(hub + '/%2B/size' + route).then(r => r.json()).then(r => {
@@ -567,6 +567,7 @@ function viewItems(path, query, hash) {
             parent.name = '..';
             r.data.children.unshift(parent);
         }
+        folderSizeViews = {}; // Reset!
         r.data.children.forEach(v => {
             const listItem = createElement('li');
             const listItemLink = createElement('a');
