@@ -255,7 +255,9 @@ function loadCodeMirror5() {
         // Order #4
         loadScript(base + '/mode/markdown/markdown.min.js'),
         loadScript(base + '/mode/nginx/nginx.min.js'),
-        loadScript(base + '/mode/yaml/yaml.min.js')
+        loadScript(base + '/mode/yaml/yaml.min.js'),
+        // Order #5
+        loadScript(base + '/mode/yaml-frontmatter/yaml-frontmatter.min.js')
     ]).then(() => {
         wasLoadCodeMirror5 = true;
         if (!window.CodeMirror) throw new Error('Error loading `CodeMirror` library!');
@@ -469,6 +471,11 @@ function viewItem(path, query, hash, then) {
                         mode = 'text/x-less';
                     } else if ('scss' === r.data.x) {
                         mode = 'text/x-scss';
+                    } else if (('md' === r.data.x || 'txt' === r.data.x) && '---\n' === r.data.content.slice(0, 4)) {
+                        mode = {
+                            base: 'text/markdown',
+                            name: 'yaml-frontmatter'
+                        };
                     }
                     console.log(mode);
                     itemContentContent.classList.add('cm-s', 'cm-s-default');
@@ -525,6 +532,11 @@ function viewItemTextEditor(path, query, hash, then) {
                         mode = 'text/x-less';
                     } else if ('scss' === r.data.x) {
                         mode = 'text/x-scss';
+                    } else if (('md' === r.data.x || 'txt' === r.data.x) && '---\n' === r.data.content.slice(0, 4)) {
+                        mode = {
+                            base: 'text/markdown',
+                            name: 'yaml-frontmatter'
+                        };
                     }
                     console.log(mode);
                     form.elements.content.value = r.data.content;
