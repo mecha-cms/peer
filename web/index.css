@@ -397,6 +397,10 @@ h2 [role='status'] {
   text-align: left;
 }
 
+[role='application']:empty {
+  display: none;
+}
+
 [role='application']:has(> form > p > [name='pass']) {
   display: inline-block;
   margin: 0 auto;
@@ -431,6 +435,11 @@ form .CodeMirror {
 form .CodeMirror-scroll {
   max-height: 36em;
   min-height: 1em;
+}
+
+form .CodeMirror-simplescroll-horizontal,
+form .CodeMirror-simplescroll-vertical {
+  cursor: pointer;
 }
 
 form .CodeMirror * + div {

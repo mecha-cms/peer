@@ -240,8 +240,10 @@ function loadCodeMirror5() {
         loadCSS(base + '/codemirror.min.css'),
         loadScript(base + '/codemirror.min.js'),
         // Order #1
+        loadCSS(base + '/addon/scroll/simplescrollbars.min.css'),
         loadScript(base + '/addon/edit/closebrackets.min.js'),
         loadScript(base + '/addon/runmode/runmode.min.js'),
+        loadScript(base + '/addon/scroll/simplescrollbars.min.js'),
         // Order #2
         loadScript(base + '/mode/clike/clike.min.js'),
         loadScript(base + '/mode/css/css.min.js'),
@@ -533,6 +535,7 @@ function viewItemTextEditor(path, query, hash, then) {
                             lineNumbers: true,
                             lineWrapping: false,
                             mode,
+                            scrollbarStyle: 'simple',
                             viewportMargin: Infinity
                         });
                         form && form.addEventListener('submit', () => cm.save());

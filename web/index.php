@@ -15,9 +15,7 @@ $sub = '/peer/web';
     <link href="<?= $sub; ?>/index.css" rel="stylesheet">
   </head>
   <body>
-    <div role="application">
-      <p role="status">Loading…</p>
-    </div>
+    <div role="application"></div>
     <script>
       const hub = '<?= $hub; ?>';
       const sub = '<?= $sub; ?>';
