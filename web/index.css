@@ -259,7 +259,7 @@ pre code {
   font: inherit;
   margin: 0;
   padding: 0.25rem 0.5rem;
-  width: 12rem;
+  width: 10rem;
 }
 
 :where(button) {
@@ -293,7 +293,7 @@ pre code {
   width: 100%;
 }
 
-h2 + ul {
+h3 + ul {
   display: block;
   list-style: none;
   margin-left: 0;
@@ -301,7 +301,7 @@ h2 + ul {
   padding: 0;
 }
 
-h2 + ul > li {
+h3 + ul > li {
   display: flex;
   gap: 0.5rem;
   list-style: none;
@@ -309,25 +309,20 @@ h2 + ul > li {
   padding: 0.25rem 0.75rem;
 }
 
-h2 + ul > li > a:first-child {
+h3 + ul > li > a:first-child {
   margin-right: auto;
 }
 
-h2 + ul > li:hover {
+h3 + ul > li:hover {
   background: rgb(0 0 255 / 0.05);
 }
 
-h2 + ul > li:focus-within {
+h3 + ul > li:focus-within {
   background: rgb(0 0 255 / 0.10);
 }
 
-h2 + ul > li:focus-within:hover {
+h3 + ul > li:focus-within:hover {
   background: rgb(0 0 255 / 0.15);
-}
-
-h2 [role='status'] {
-  font-size: 60%;
-  font-weight: 400;
 }
 
 [aria-current] {
@@ -350,7 +345,7 @@ h2 [role='status'] {
   cursor: wait;
 }
 
-[aria-busy] [role='application'] > * {
+[aria-busy] [role='application'] > :not([role='alert']) {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -428,7 +423,7 @@ form .CodeMirror {
   font-size: 80%;
   height: auto;
   line-height: 1.1;
-  max-height: 36em;
+  max-height: 40em;
   min-height: 1em;
 }
 

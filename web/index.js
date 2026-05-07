@@ -5,15 +5,21 @@ const form = {};
 
 let folderSizeViews = {};
 
-form.blob = createElement('form');
-form.file = createElement('form');
-form.folder = createElement('form');
-form.user = createElement('form');
+form.blob = createElement('form', false, {
+    'method': 'post'
+});
 
-form.blob.method = 'post';
-form.file.method = 'post';
-form.folder.method = 'post';
-form.user.method = 'post';
+form.file = createElement('form', false, {
+    'method': 'post'
+});
+
+form.folder = createElement('form', false, {
+    'method': 'post'
+});
+
+form.user = createElement('form', false, {
+    'method': 'post'
+});
 
 form.user.addEventListener('submit', function (e) {
     // Remove existing alert(s)
@@ -27,6 +33,7 @@ form.user.addEventListener('submit', function (e) {
     }
     const info = createAlert('Logging in…', 'info');
     application.prepend(info);
+    updateTitle('Logging in…', true);
     fetch(hub + '/enter', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
@@ -34,6 +41,7 @@ form.user.addEventListener('submit', function (e) {
     }).then(r => r.json()).then(r => {
         if (200 !== r.status) {
             updateAlert(info, r.description, 'error', 1000);
+            updateTitle('Application · Error');
             this.elements.pass.value = "";
             if (404 === r.status) {
                 this.elements.key.focus();
@@ -88,16 +96,21 @@ function updateAlert(element, text, type, timeOut) {
 
 function updateElement(element, content, attributes) {
     if (attributes) {
-        for (let name in attributes) {
-            let v = attributes[name];
-            if (false === v || null === v) {
+        for (const [name, value] of Object.entries(attributes)) {
+            if (false === value || null === value) {
                 element.removeAttribute(name);
             } else {
-                element.setAttribute(name, v);
+                element.setAttribute(name, value + "");
             }
         }
     }
-    if ('string' === typeof content) {
+    if (null === content) {
+        element.replaceChildren();
+    } else if (content instanceof Node) {
+        element.replaceChildren(content);
+    } else if (content instanceof Array || content instanceof HTMLCollection || content instanceof NodeList) {
+        element.replaceChildren(...Array.from(content));
+    } else if ('string' === typeof content) {
         element.innerHTML = content;
     }
     return element;
@@ -186,13 +199,11 @@ function createTracesFromString(path) {
             k > 0 && span.append('/');
             span.append(v);
         } else {
-            const a = createElement('a');
+            const a = createElement('a', v, {
+                'aria-current': tracesMax === k + 1 ? 'location' : false,
+                'href': sub + trace.slice(1) + '?chunk=20&part=1'
+            });
             a.addEventListener('click', onClickAnchor);
-            a.href = sub + trace.slice(1) + '?chunk=20&part=1';
-            a.innerHTML = v;
-            if (tracesMax === (k + 1)) {
-                a.setAttribute('aria-current', 'location');
-            }
             span.append('/', a);
         }
     });
@@ -210,22 +221,24 @@ function f3h(path, method = 'GET', headers = {}, body = "") {
 
 function loadScript(src) {
     return new Promise((resolve, reject) => {
-        const s = createElement('script');
-        s.async = false;
+        const s = createElement('script', false, {
+            'async': 'false',
+            'src': src
+        });
         s.onerror = () => reject(new Error('Failed to load ' + src));
         s.onload = resolve;
-        s.src = src;
         document.head.append(s);
     });
 }
 
 function loadCSS(href) {
     return new Promise((resolve, reject) => {
-        const l = createElement('link');
-        l.href = href;
+        const l = createElement('link', false, {
+            'href': href,
+            'rel': 'stylesheet'
+        });
         l.onerror = () => reject(new Error('Failed to load ' + href));
         l.onload = resolve;
-        l.rel = 'stylesheet';
         document.head.append(l);
     });
 }
@@ -266,12 +279,28 @@ function loadCodeMirror5() {
 }
 
 function onAfterView(path, query, hash, then) {
-    const bar = createElement('p');
-    // Folder navigation
-    const changeOptions = createElement('select');
-    changeOptions.addEventListener('change', function (e) {
-        updateRoute('/lot/' + this.value + '?chunk=20&part=1'), view();
+    // Exit button
+    const exit = createElement('button', '🔒 Exit');
+    exit.addEventListener('click', function (e) {
+        localStorage.removeItem('hub');
+        localStorage.removeItem('user');
+        updateRoute('/enter'), view(onAfterViewFormUser);
         e.preventDefault();
+    });
+    // Search input
+    const search = createElement('input', false, {
+        'placeholder': 'Search…',
+        'style': 'flex:1;',
+        'type': 'text'
+    });
+    search.addEventListener('keydown', function (e) {
+        if ('Enter' === e.key) {
+            alert('Search!');
+            e.preventDefault();
+        }
+    });
+    // Folder navigation
+    const options = createElement('select', false, {
     });
     Object.entries({
         asset: 'Asset',
@@ -284,33 +313,31 @@ function onAfterView(path, query, hash, then) {
         x: 'Extension',
         y: 'Layout'
     }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
-        const changeOption = createElement('option', '📁 ' + v[1]);
-        changeOption.value = v[0];
-        changeOptions.append(changeOption);
+        const option = createElement('option', '📁 ' + v[1], {
+            'value': v[0]
+        });
+        options.append(option);
     });
-    changeOptions.value = path.split('/')[2] || "";
-    if ("" === changeOptions.value) {
-        const changeOption = createElement('option', '🏠 Home');
-        const changeOptionCurrent = createElement('option', '⛔ System');
-        changeOption.value = 'asset';
-        changeOptionCurrent.disabled = true;
-        changeOptionCurrent.value = "";
-        changeOptions.replaceChildren(changeOptionCurrent, changeOption);
-        changeOptions.value = "";
-    }
-    // Exit link
-    const exit = createElement('button');
-    exit.addEventListener('click', function (e) {
-        localStorage.removeItem('hub');
-        localStorage.removeItem('user');
-        updateRoute('/enter'), view(onAfterViewFormUser);
+    options.addEventListener('change', function (e) {
+        updateRoute('/lot/' + this.value + '?chunk=20&part=1'), view();
         e.preventDefault();
     });
-    exit.innerHTML = '🔒 Exit';
-    bar.append(changeOptions, exit);
-    bar.style.display = 'flex';
-    bar.style.justifyContent = 'space-between';
-    application.prepend(bar);
+    options.value = path.split('/')[2] || "";
+    if ("" === options.value) {
+        updateElement(options, [
+            createElement('option', '⛔ System', {
+                'disabled': "",
+                'value': ""
+            }),
+            createElement('option', '🏠 Home', {
+                'value': 'asset'
+            })
+        ]);
+        options.value = "";
+    }
+    application.prepend(createElement('p', [options, search, exit], {
+        'style': 'display:flex;gap:0.5rem;'
+    }));
     // Calculate folder size then view
     for (let route in folderSizeViews) {
         (() => {
@@ -381,27 +408,28 @@ function view(then) {
 
 function viewFormFile(path, query, hash, then) {
     updateTitle('Application · File Editor');
-    const content = createElement('textarea');
-    const contentParent = createElement('div');
-    const name = createElement('input');
-    const taskDelete = createElement('button');
-    const taskParent = createElement('p');
-    const taskSave = createElement('button');
-    content.name = 'content';
-    content.placeholder = 'Content goes here…';
-    name.name = 'name';
-    name.placeholder = 'name.txt';
-    name.style.flex = 1;
-    name.type = 'text';
-    taskDelete.innerHTML = 'Delete';
-    taskDelete.type = 'button';
-    taskSave.innerHTML = 'Save';
-    taskSave.type = 'submit';
-    contentParent.append(content);
-    taskParent.append(name, ' ', taskSave, ' ', taskDelete);
-    taskParent.setAttribute('role', 'group');
-    form.file.replaceChildren(contentParent, taskParent);
-    application.replaceChildren(form.file);
+    const content = createElement('textarea', "", {
+        'name': 'content',
+        'placeholder': 'Content goes here…'
+    });
+    const name = createElement('input', false, {
+        'name': 'name',
+        'placeholder': 'name.txt',
+        'style': 'flex:1;',
+        'type': 'text'
+    });
+    const taskDelete = createElement('button', 'Delete', {
+        'type': 'button'
+    });
+    const taskSave = createElement('button', 'Save', {
+        'type': 'submit',
+    });
+    updateElement(application, updateElement(form.file, [
+        createElement('div', content),
+        createElement('p', [name, taskSave, taskDelete], {
+            'role': 'group'
+        })
+    ]));
     content.focus();
     then && then.call(form.file);
     return form.file;
@@ -409,30 +437,32 @@ function viewFormFile(path, query, hash, then) {
 
 function viewFormUser(path, query, hash, then) {
     updateTitle('Application · Enter');
-    const key = createElement('input');
-    const keyParent = createElement('p');
-    const pass = createElement('input');
-    const passParent = createElement('p');
-    const peer = createElement('input');
-    const task = createElement('button');
-    const taskParent = createElement('p');
-    key.name = 'key';
-    key.placeholder = 'User';
-    key.type = 'text';
-    pass.name = 'pass';
-    pass.placeholder = 'Pass';
-    pass.type = 'password';
-    peer.name = 'peer';
-    peer.type = 'hidden';
-    peer.value = 'YOUR_APPLICATION_ID';
-    task.innerHTML = '🔓 Enter';
-    task.type = 'submit';
-    keyParent.append(key);
-    passParent.append(pass);
-    taskParent.append(task);
-    taskParent.setAttribute('role', 'group');
-    form.user.replaceChildren(keyParent, passParent, taskParent, peer);
-    application.replaceChildren(form.user);
+    const key = createElement('input', false, {
+        'name': 'key',
+        'placeholder': 'User',
+        'type': 'text'
+    });
+    const pass = createElement('input', false, {
+        'name': 'pass',
+        'placeholder': 'Pass',
+        'type': 'password'
+    });
+    const peer = createElement('input', false, {
+        'name': 'peer',
+        'type': 'hidden',
+        'value': 'YOUR_APPLICATION_ID'
+    });
+    const task = createElement('button', '🔓 Enter', {
+        'type': 'submit'
+    });
+    updateElement(application, updateElement(form.user, [
+        createElement('p', key),
+        createElement('p', pass),
+        createElement('p', task, {
+            'role': 'group'
+        }),
+        peer
+    ]));
     key.focus();
     then && then.call(form.user);
     return form.user;
@@ -440,9 +470,7 @@ function viewFormUser(path, query, hash, then) {
 
 function viewItem(path, query, hash, then) {
     updateTitle('Loading…', true);
-    const itemContent = createElement('pre');
-    const itemContentContent = createElement('code');
-    const itemTitle = createElement('h2');
+    const itemContent = createElement('code', 'Loading content…');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
@@ -453,42 +481,46 @@ function viewItem(path, query, hash, then) {
             return;
         }
         if (404 === r.status) {
+            updateElement(application, createAlert(r.description, 'error', 1000));
             updateTitle('Application · Error');
-            application.replaceChildren(createAlert(r.description, 'error', 1000));
             onAfterView(path, query, hash, then);
             return;
         }
+        updateElement(application, [
+            createElement('h3', [
+                '📂 ',
+                createTracesFromString('.' + path)
+            ]),
+            createElement('pre', itemContent)
+        ]);
         updateTitle('Application · File Viewer');
-        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
-        itemContent.append(itemContentContent);
-        application.replaceChildren(itemTitle, itemContent);
         if (r.is.text) {
-            itemContentContent.textContent = 'Loading content…';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
-                    let mode = r.data.type;
-                    if ('less' === r.data.x) {
+                    let mode = r.data.type,
+                        x = path.split('.').pop();
+                    if ('less' === x) {
                         mode = 'text/x-less';
-                    } else if ('scss' === r.data.x) {
+                    } else if ('scss' === x) {
                         mode = 'text/x-scss';
-                    } else if (('md' === r.data.x || 'txt' === r.data.x) && '---\n' === r.data.content.slice(0, 4)) {
+                    } else if (('md' === x || 'txt' === x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
                             base: 'text/markdown',
                             name: 'yaml-frontmatter'
                         };
                     }
                     console.log(mode);
-                    itemContentContent.classList.add('cm-s', 'cm-s-default');
-                    itemContentContent.textContent = r.data.content;
+                    itemContent.classList.add('cm-s', 'cm-s-default');
+                    itemContent.textContent = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
-                        CodeMirror.runMode(r.data.content, mode, itemContentContent);
+                        CodeMirror.runMode(r.data.content, mode, itemContent);
                     }).catch(e => {
                         application.prepend(createAlert(e + "", 'error', 1000));
                     });
                 }
             });
         } else {
-            itemContentContent.textContent = JSON.stringify(r, null, 2);
+            itemContent.textContent = JSON.stringify(r, null, 2);
         }
         onAfterView(path, query, hash, then);
     }).catch(e => {
@@ -499,7 +531,6 @@ function viewItem(path, query, hash, then) {
 
 function viewItemTextEditor(path, query, hash, then) {
     updateTitle('Loading…', true);
-    const itemTitle = createElement('h2');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
@@ -510,16 +541,21 @@ function viewItemTextEditor(path, query, hash, then) {
             return;
         }
         if (404 === r.status) {
+            updateElement(application, createAlert(r.description, 'error', 1000));
             updateTitle('Application · Error');
-            application.replaceChildren(createAlert(r.description, 'error', 1000));
             onAfterView(path, query, hash, then);
             return;
         }
-        const form = viewFormFile();
+        const form = viewFormFile(path, query, hash);
         form.elements.content.parentNode.style.display = r.is.text ? "" : 'none';
         form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
-        itemTitle.append('📂', ' ', createTracesFromString('.' + path));
-        application.prepend(itemTitle);
+        updateElement(application, [
+            createElement('h3', [
+                '📂 ',
+                createTracesFromString('.' + path)
+            ]),
+            form
+        ]);
         if (r.is.text) {
             let info = createAlert('Loading CodeMirror library…', 'info');
             form.elements.content.parentNode.append(info);
@@ -527,12 +563,13 @@ function viewItemTextEditor(path, query, hash, then) {
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 updateTitle('Application · File Editor');
                 if (200 === r.status) {
-                    let mode = r.data.type;
-                    if ('less' === r.data.x) {
+                    let mode = r.data.type,
+                        x = path.split('.').pop();
+                    if ('less' === x) {
                         mode = 'text/x-less';
-                    } else if ('scss' === r.data.x) {
+                    } else if ('scss' === x) {
                         mode = 'text/x-scss';
-                    } else if (('md' === r.data.x || 'txt' === r.data.x) && '---\n' === r.data.content.slice(0, 4)) {
+                    } else if (('md' === x || 'txt' === x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
                             base: 'text/markdown',
                             name: 'yaml-frontmatter'
@@ -570,13 +607,7 @@ function viewItemTextEditor(path, query, hash, then) {
 
 function viewItems(path, query, hash, then) {
     updateTitle('Loading…', true);
-    const description = createElement('p');
     const listItems = createElement('ul');
-    const listNav = createElement('nav', "", {
-        'aria-label': 'Pagination'
-    });
-    const listTitle = createElement('h2');
-    description.setAttribute('role', 'alert');
     f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
@@ -587,25 +618,33 @@ function viewItems(path, query, hash, then) {
             return;
         }
         if (404 === r.status) {
+            updateElement(application, createAlert(r.description, 'error', 1000));
             updateTitle('Application · Error');
-            application.replaceChildren(createAlert(r.description, 'error', 1000));
             onAfterView(path, query, hash, then);
             return;
         }
-        updateTitle('Application · Folder');
         let parent = r.data.parent;
-        listNav.append(createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
-            if (current || disabled) {
-                this.addEventListener('click', e => e.preventDefault());
-            } else {
-                this.addEventListener('click', onClickAnchor);
-            }
-            this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
-        }, 'First', 'Previous', 'Next', 'Last'));
-        listTitle.append('📂', ' ', createTracesFromString('.' + path));
-        application.replaceChildren(listTitle, listItems);
+        updateTitle('Application · Folder');
+        updateElement(application, [
+            createElement('h3', [
+                '📂 ',
+                createTracesFromString('.' + path)
+            ]),
+            listItems
+        ]);
         if (r.has.next || r.has.prev) {
-            application.append(listNav);
+            application.append(createElement('nav', [
+                createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
+                    if (current || disabled) {
+                        this.addEventListener('click', e => e.preventDefault());
+                    } else {
+                        this.addEventListener('click', onClickAnchor);
+                    }
+                    this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
+                }, 'First', 'Previous', 'Next', 'Last')
+            ], {
+                'aria-label': 'Pagination'
+            }));
         }
         if (parent) {
             parent.name = '..';
@@ -613,54 +652,56 @@ function viewItems(path, query, hash, then) {
         }
         folderSizeViews = {}; // Reset!
         r.data.children.forEach(v => {
-            const listItem = createElement('li');
-            const listItemLink = createElement('a');
-            const listItemLinkDelete = createElement('a');
-            const listItemLinkEdit = createElement('a');
-            const listItemLinkOpen = createElement('a');
-            const listItemLinkView = createElement('a');
-            const listItemLinks = createElement('span');
-            const listItemSize = createElement('span', v.size ?? '…');
-            listItemSize.setAttribute('role', 'status');
+            const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : ""),
+                'title': '..' === v.name ? 'Go to parent' : (v.is.blob ? 'Open' : 'View')
+            });
+            const listItemLinkDelete = createElement('a', '🗑️', {
+                'href': '#delete',
+                'title': 'Delete'
+            });
+            const listItemLinkEdit = createElement('a', '📝', {
+                'href': sub + v.route + '#edit',
+                'title': 'Edit'
+            });
+            const listItemLinkOpen = createElement('a', '🔍', {
+                'href': listItemLink.href,
+                'title': 'Open'
+            });
+            const listItemLinkView = createElement('a', '👁', {
+                'href': hub + '/blob' + v.route,
+                'title': 'View'
+            });
+            const listItemLinks = createElement('span', [
+                v.is.folder ? listItemLinkOpen : listItemLinkView,
+                listItemLinkEdit,
+                listItemLinkDelete
+            ], {
+                'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
+            });
+            const listItemSize = createElement('span', v.size ?? '…', {
+                'role': 'status'
+            });
             if (v.is.folder) {
                 folderSizeViews[v.route] = listItemSize;
             }
-            listItemLink.innerHTML = v.name + (v.is.file && v.x ? '.' + v.x : "");
-            if ('..' === v.name) {
-                listItemLink.title = 'Go to parent';
-            }
-            if (v.is.blob) {
-                listItemLink.addEventListener('click', function (e) {
-                    openBlob(this.href);
-                    e.preventDefault();
-                });
-                listItemLink.href = hub + '/blob' + v.route;
-            } else {
-                listItemLink.addEventListener('click', onClickAnchor);
-                listItemLink.href = sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : "");
-            }
+            listItemLink.addEventListener('click', v.is.blob ? function (e) {
+                openBlob(this.href);
+                e.preventDefault();
+            } : onClickAnchor);
             listItemLinkDelete.addEventListener('click', function (e) {
                 alert('Delete');
                 e.preventDefault();
             });
-            listItemLinkDelete.href = '#delete';
-            listItemLinkDelete.innerHTML = '🗑️';
-            listItemLinkDelete.title = 'Delete';
             listItemLinkEdit.addEventListener('click', function (e) {
                 let route = this.getAttribute('href').slice(sub.length);
                 updateRoute(route), viewItemTextEditor(route.split('#')[0]);
                 e.preventDefault();
             });
-            listItemLinkEdit.href = sub + v.route + '#edit';
-            listItemLinkEdit.innerHTML = '📝';
-            listItemLinkEdit.title = 'Edit';
             listItemLinkOpen.addEventListener('click', function (e) {
                 listItemLink.click();
                 e.preventDefault();
             });
-            listItemLinkOpen.href = listItemLink.href;
-            listItemLinkOpen.innerHTML = '🔍';
-            listItemLinkOpen.title = 'Open';
             listItemLinkView.addEventListener('click', v.is.blob ? function (e) {
                 openBlob(this.href);
                 e.preventDefault();
@@ -668,16 +709,12 @@ function viewItems(path, query, hash, then) {
                 listItemLink.click();
                 e.preventDefault();
             });
-            listItemLinkView.href = hub + '/blob' + v.route;
-            listItemLinkView.innerHTML = '👁';
-            listItemLinkView.title = 'View';
-            listItemLinks.append(v.is.folder ? listItemLinkOpen : listItemLinkView, ' ', listItemLinkEdit, ' ', listItemLinkDelete);
-            listItemLinks.style.display = 'flex';
-            listItemLinks.style.gap = '0.5em';
-            listItemLinks.style.justifyContent = 'end';
-            listItemLinks.style.minWidth = '5em';
-            listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
-            listItems.append(listItem);
+            listItems.append(createElement('li', [
+                v.is.file ? '📄' : '📁',
+                listItemLink,
+                listItemSize,
+                listItemLinks
+            ]));
         });
         onAfterView(path, query, hash, then);
     }).catch(e => {
