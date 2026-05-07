@@ -21,6 +21,10 @@
   padding: 2rem;
 }
 
+::placeholder {
+  color: #666;
+}
+
 :where(address,
   article,
   aside,

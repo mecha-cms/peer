@@ -300,7 +300,7 @@ function onAfterView(path, query, hash, then) {
     });
     // Search input
     const search = createElement('input', false, {
-        'placeholder': '🔍 Search…',
+        'placeholder': 'Search…',
         'style': 'flex:1;',
         'type': 'text'
     });
