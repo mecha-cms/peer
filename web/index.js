@@ -16,6 +16,8 @@ form.folder.method = 'post';
 form.user.method = 'post';
 
 form.user.addEventListener('submit', function (e) {
+    // Remove existing alert(s)
+    application.querySelectorAll('[role=alert]').forEach(v => v.remove());
     let key = this.elements.key.value,
         pass = this.elements.pass.value,
         peer = this.elements.peer.value;
@@ -24,14 +26,14 @@ form.user.addEventListener('submit', function (e) {
         key = '@' + key;
     }
     const info = createAlert('Logging in…', 'info');
-    this.prepend(info);
+    application.prepend(info);
     fetch(hub + '/enter', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
         method: 'POST'
     }).then(r => r.json()).then(r => {
         if (200 !== r.status) {
-            updateAlert(info, r.description || 'Unknown error.', 'error');
+            updateAlert(info, r.description, 'error', 1000);
             this.elements.pass.value = "";
             if (404 === r.status) {
                 this.elements.key.focus();
@@ -45,18 +47,24 @@ form.user.addEventListener('submit', function (e) {
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
         localStorage.setItem('user', r.user);
-        updateRoute('/lot/asset?chunk=20&part=1'), view(1);
+        updateRoute('/lot/asset?chunk=20&part=1'), view(function () {
+            application.prepend(createAlert('Logged in.', 'success'));
+        });
     }).catch(e => {
-        updateAlert(info, e + "", 'error');
+        updateAlert(info, e + "", 'error', 1000);
     });
     e.preventDefault();
 });
 
-function createAlert(text, type, element) {
-    return createElement(element || 'p', text, {
+function createAlert(text, type, timeOut) {
+    const element = createElement('p', text, {
         'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
         'role': 'alert'
     });
+    if (timeOut) {
+        window.setTimeout(() => element.remove(), timeOut);
+    }
+    return element;
 }
 
 function createElement(name, content, attributes) {
@@ -67,8 +75,15 @@ function createText(content) {
     return document.createTextNode(content);
 }
 
-function updateAlert(element, text, type) {
-    return createAlert(text, type, element);
+function updateAlert(element, text, type, timeOut) {
+    updateElement(element, text, {
+        'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
+        'role': 'alert'
+    });
+    if (timeOut) {
+        window.setTimeout(() => element.remove(), timeOut);
+    }
+    return element;
 }
 
 function updateElement(element, content, attributes) {
@@ -125,13 +140,13 @@ function createPager(current, count, chunk, kin, then, first, previous, next, la
             'role': 'none'
         });
     }
-    function createLink(page, title, rel, isCurrent, isDisabled) {
+    function createLink(page, title, rel, current, disabled) {
         let element = createElement('a', title, {
-            'aria-current': isCurrent ? 'page' : false,
-            'aria-disabled': isDisabled ? 'true' : false,
+            'aria-current': current ? 'page' : false,
+            'aria-disabled': disabled ? 'true' : false,
             'rel': rel || false
         });
-        then && then.call(element, page, element, isCurrent, isDisabled);
+        then && then.call(element, page, current, disabled);
         return element;
     }
     if (previous) {
@@ -246,7 +261,7 @@ function loadCodeMirror5() {
     });
 }
 
-function onAfterView() {
+function onAfterView(path, query, hash, then) {
     const bar = createElement('p');
     // Folder navigation
     const changeOptions = createElement('select');
@@ -269,7 +284,7 @@ function onAfterView() {
         changeOption.value = v[0];
         changeOptions.append(changeOption);
     });
-    changeOptions.value = window.location.pathname.slice(sub.length + 1).split('/')[1] || "";
+    changeOptions.value = path.split('/')[2] || "";
     if ("" === changeOptions.value) {
         const changeOption = createElement('option', '🏠 Home');
         const changeOptionCurrent = createElement('option', '⛔ System');
@@ -284,7 +299,7 @@ function onAfterView() {
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('hub');
         localStorage.removeItem('user');
-        updateRoute('/enter'), view(-1);
+        updateRoute('/enter'), view(onAfterViewFormUser);
         e.preventDefault();
     });
     exit.innerHTML = '🔒 Exit';
@@ -292,12 +307,6 @@ function onAfterView() {
     bar.style.display = 'flex';
     bar.style.justifyContent = 'space-between';
     application.prepend(bar);
-    // if (1 === query._status) {
-    //     const description = createElement('p');
-    //     description.innerHTML = 'Logged in.';
-    //     description.setAttribute('role', 'alert');
-    //     application.prepend(description);
-    // }
     // Calculate folder size then view
     for (let route in folderSizeViews) {
         (() => {
@@ -312,11 +321,27 @@ function onAfterView() {
             });
         })();
     }
+    then && then.call(application);
+}
+
+function onAfterViewFormUser(path, query, hash, then) {
+    if (!localStorage.getItem('hub')) {
+        application.prepend(createAlert('Logged out.', 'success'));
+    }
+    then && then.call(application);
 }
 
 function onClickAnchor(e) {
     updateRoute(this.href), view();
     e.preventDefault();
+}
+
+function onHashChange() {
+    view();
+}
+
+function onPopState() {
+    view();
 }
 
 function openBlob(path, query, hash) {
@@ -329,27 +354,28 @@ function openBlob(path, query, hash) {
         let v = URL.createObjectURL(blob);
         window.open(v, '_blank');
         setTimeout(() => URL.revokeObjectURL(v), 1000);
-    }).catch(console.error);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error', 1000));
+    });
 }
 
-function view(status) {
+function view(then) {
     const hash = window.location.hash;
     const path = window.location.pathname.slice(sub.length);
     const query = Object.fromEntries(new URLSearchParams(window.location.search));
     if ('/enter' === path) {
         if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
-            viewFormUser(status);
+            viewFormUser(path, query, hash, then);
         } else {
-            viewFormUser(status);
+            viewFormUser(path, query, hash, then);
         }
     } else {
-        query._status = status;
-        query.part ? viewItems(path, query, hash) : viewItem(path, query, hash);
+        query.part ? viewItems(path, query, hash, then) : viewItem(path, query, hash, then);
     }
 }
 
-function viewFormFile(path, query, hash) {
+function viewFormFile(path, query, hash, then) {
     updateTitle('Application · File Editor');
     const content = createElement('textarea');
     const contentParent = createElement('div');
@@ -373,10 +399,11 @@ function viewFormFile(path, query, hash) {
     form.file.replaceChildren(contentParent, taskParent);
     application.replaceChildren(form.file);
     content.focus();
+    then && then.call(form.file);
     return form.file;
 }
 
-function viewFormUser(status) {
+function viewFormUser(path, query, hash, then) {
     updateTitle('Application · Enter');
     const key = createElement('input');
     const keyParent = createElement('p');
@@ -403,19 +430,12 @@ function viewFormUser(status) {
     form.user.replaceChildren(keyParent, passParent, taskParent, peer);
     application.replaceChildren(form.user);
     key.focus();
-    if (-1 === status && !localStorage.getItem('hub')) {
-        const description = createElement('p');
-        description.innerHTML = 'Logged out.';
-        description.setAttribute('aria-live', 'polite');
-        description.setAttribute('role', 'alert');
-        application.prepend(description);
-    }
+    then && then.call(form.user);
     return form.user;
 }
 
-function viewItem(path, query, hash) {
+function viewItem(path, query, hash, then) {
     updateTitle('Loading…', true);
-    const description = createElement('p');
     const itemContent = createElement('pre');
     const itemContentContent = createElement('code');
     const itemTitle = createElement('h2');
@@ -425,21 +445,14 @@ function viewItem(path, query, hash) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view();
+            updateRoute('/enter'), view(onAfterViewFormUser);
             return;
         }
         if (404 === r.status) {
             updateTitle('Application · Error');
-            description.innerHTML = r.description;
-            application.replaceChildren(description);
-            onAfterView();
+            application.replaceChildren(createAlert(r.description, 'error', 1000));
+            onAfterView(path, query, hash, then);
             return;
-        }
-        let codeMirrorMode = r.data.type;
-        if ('text/x-php' === codeMirrorMode) {
-            codeMirrorMode = 'application/x-httpd-php';
-        } else if ('md' === r.data.x) {
-            codeMirrorMode = 'text/x-markdown';
         }
         updateTitle('Application · File Viewer');
         itemTitle.append('📂', ' ', createTracesFromString('.' + path));
@@ -449,47 +462,49 @@ function viewItem(path, query, hash) {
             itemContentContent.textContent = 'Loading content…';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
+                    let mode = r.data.type;
+                    if ('less' === r.data.x) {
+                        mode = 'text/x-less';
+                    } else if ('scss' === r.data.x) {
+                        mode = 'text/x-scss';
+                    }
+                    console.log(mode);
                     itemContentContent.classList.add('cm-s', 'cm-s-default');
                     itemContentContent.textContent = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
-                        CodeMirror.runMode(r.data.content, codeMirrorMode, itemContentContent);
-                    }).catch(console.error);
+                        CodeMirror.runMode(r.data.content, mode, itemContentContent);
+                    }).catch(e => {
+                        application.prepend(createAlert(e + "", 'error', 1000));
+                    });
                 }
             });
         } else {
             itemContentContent.textContent = JSON.stringify(r, null, 2);
         }
-        onAfterView();
-    }).catch(console.error);
+        onAfterView(path, query, hash, then);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error', 1000));
+        then && then.call(application);
+    });
 }
 
-function viewItemTextEditor(path, query, hash) {
+function viewItemTextEditor(path, query, hash, then) {
     updateTitle('Loading…', true);
-    const itemDescription = createElement('p');
     const itemTitle = createElement('h2');
-    itemDescription.setAttribute('role', 'alert');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view();
+            updateRoute('/enter'), view(onAfterViewFormUser);
             return;
         }
         if (404 === r.status) {
             updateTitle('Application · Error');
-            itemDescription.innerHTML = r.description;
-            application.replaceChildren(itemDescription);
-            onAfterView();
+            application.replaceChildren(createAlert(r.description, 'error', 1000));
+            onAfterView(path, query, hash, then);
             return;
-        }
-        let codeMirrorMode = r.data.type;
-        console.log(r.data.type);
-        if ('text/x-php' === codeMirrorMode) {
-            codeMirrorMode = 'application/x-httpd-php';
-        } else if ('md' === r.data.x) {
-            codeMirrorMode = 'text/x-markdown';
         }
         const form = viewFormFile();
         form.elements.content.parentNode.style.display = r.is.text ? "" : 'none';
@@ -503,6 +518,13 @@ function viewItemTextEditor(path, query, hash) {
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 updateTitle('Application · File Editor');
                 if (200 === r.status) {
+                    let mode = r.data.type;
+                    if ('less' === r.data.x) {
+                        mode = 'text/x-less';
+                    } else if ('scss' === r.data.x) {
+                        mode = 'text/x-scss';
+                    }
+                    console.log(mode);
                     form.elements.content.value = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
                         const t = form.elements.content;
@@ -510,25 +532,28 @@ function viewItemTextEditor(path, query, hash) {
                             autoCloseBrackets: true,
                             lineNumbers: true,
                             lineWrapping: false,
-                            mode: codeMirrorMode,
+                            mode,
                             viewportMargin: Infinity
                         });
                         form && form.addEventListener('submit', () => cm.save());
                         cm.refresh();
                     }).catch(e => {
-                        form.elements.content.style.minHeight = 'calc(' + form.elements.content.scrollHeight + 'px + 0.25em)';
+                        application.prepend(createAlert(e + "", 'error', 1000));
                     });
                     info.remove();
                 } else {
-                    updateAlert(info, r.description, 'error');
+                    updateAlert(info, r.description, 'error', 1000);
                 }
             });
         } else {}
-        onAfterView();
-    }).catch(console.error);
+        onAfterView(path, query, hash, then);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error', 1000));
+        then && then.call(application);
+    });
 }
 
-function viewItems(path, query, hash) {
+function viewItems(path, query, hash, then) {
     updateTitle('Loading…', true);
     const description = createElement('p');
     const listItems = createElement('ul');
@@ -543,20 +568,23 @@ function viewItems(path, query, hash) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view();
+            updateRoute('/enter'), view(onAfterViewFormUser);
             return;
         }
         if (404 === r.status) {
             updateTitle('Application · Error');
-            description.innerHTML = r.description;
-            application.replaceChildren(description);
-            onAfterView();
+            application.replaceChildren(createAlert(r.description, 'error', 1000));
+            onAfterView(path, query, hash, then);
             return;
         }
         updateTitle('Application · Folder');
         let parent = r.data.parent;
-        listNav.append(createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part) {
-            this.addEventListener('click', onClickAnchor);
+        listNav.append(createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
+            if (current || disabled) {
+                this.addEventListener('click', e => e.preventDefault());
+            } else {
+                this.addEventListener('click', onClickAnchor);
+            }
             this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
         }, 'First', 'Previous', 'Next', 'Last'));
         listTitle.append('📂', ' ', createTracesFromString('.' + path));
@@ -605,7 +633,7 @@ function viewItems(path, query, hash) {
             listItemLinkDelete.title = 'Delete';
             listItemLinkEdit.addEventListener('click', function (e) {
                 let route = this.getAttribute('href').slice(sub.length);
-                updateRoute(route), viewItemTextEditor(route);
+                updateRoute(route), viewItemTextEditor(route.split('#')[0]);
                 e.preventDefault();
             });
             listItemLinkEdit.href = sub + v.route + '#edit';
@@ -636,16 +664,19 @@ function viewItems(path, query, hash) {
             listItem.append(v.is.file ? '📄 ' : '📁 ', listItemLink, ' ', listItemSize, listItemLinks);
             listItems.append(listItem);
         });
-        onAfterView();
-    }).catch(console.error);
+        onAfterView(path, query, hash, then);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error', 1000));
+        then && then.call(application);
+    });
 }
 
 if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location.search) {} else {
     updateRoute('/enter');
 }
 
-window.addEventListener('hashchange', view);
-window.addEventListener('popstate', view);
+window.addEventListener('hashchange', onHashChange);
+window.addEventListener('popstate', onPopState);
 
 view();
 

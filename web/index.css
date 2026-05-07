@@ -351,7 +351,7 @@ h2 [role='status'] {
 }
 
 [aria-busy] [role='application'] > * {
-  opacity: 0.75;
+  opacity: 0.5;
   pointer-events: none;
 }
 
@@ -419,10 +419,17 @@ code.cm-s {
 
 form .CodeMirror {
   border: 1px solid #000;
+  box-sizing: content-box;
   cursor: text;
   font-size: 80%;
   height: auto;
   line-height: 1.1;
+  max-height: 36em;
+  min-height: 1em;
+}
+
+form .CodeMirror-scroll {
+  max-height: 36em;
   min-height: 1em;
 }
 
