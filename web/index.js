@@ -222,9 +222,9 @@ function f3h(path, method = 'GET', headers = {}, body = "") {
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const s = createElement('script', false, {
-            'async': 'false',
             'src': src
         });
+        s.async = false; // Force execution in order
         s.onerror = () => reject(new Error('Failed to load ' + src));
         s.onload = resolve;
         document.head.append(s);
@@ -402,7 +402,7 @@ function view(then) {
             viewFormUser(path, query, hash, then);
         }
     } else {
-        query.part ? viewItems(path, query, hash, then) : viewItem(path, query, hash, then);
+        query.part ? viewItems(path, query, hash, then) : ('#edit' === hash ? viewItemTextEditor(path, query, hash, then) : viewItem(path, query, hash, then));
     }
 }
 
@@ -440,11 +440,13 @@ function viewFormUser(path, query, hash, then) {
     const key = createElement('input', false, {
         'name': 'key',
         'placeholder': 'User',
+        'style': 'width:100%;',
         'type': 'text'
     });
     const pass = createElement('input', false, {
         'name': 'pass',
         'placeholder': 'Pass',
+        'style': 'width:100%;',
         'type': 'password'
     });
     const peer = createElement('input', false, {
@@ -503,7 +505,7 @@ function viewItem(path, query, hash, then) {
                         mode = 'text/x-less';
                     } else if ('scss' === x) {
                         mode = 'text/x-scss';
-                    } else if (('md' === x || 'txt' === x) && '---\n' === r.data.content.slice(0, 4)) {
+                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
                             base: 'text/markdown',
                             name: 'yaml-frontmatter'
@@ -569,7 +571,7 @@ function viewItemTextEditor(path, query, hash, then) {
                         mode = 'text/x-less';
                     } else if ('scss' === x) {
                         mode = 'text/x-scss';
-                    } else if (('md' === x || 'txt' === x) && '---\n' === r.data.content.slice(0, 4)) {
+                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
                             base: 'text/markdown',
                             name: 'yaml-frontmatter'
@@ -589,10 +591,11 @@ function viewItemTextEditor(path, query, hash, then) {
                         });
                         form && form.addEventListener('submit', () => cm.save());
                         cm.refresh();
+                        info.remove();
                     }).catch(e => {
                         application.prepend(createAlert(e + "", 'error', 1000));
+                        form.elements.content.style.display = "";
                     });
-                    info.remove();
                 } else {
                     updateAlert(info, r.description, 'error', 1000);
                 }

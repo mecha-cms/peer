@@ -397,8 +397,8 @@ h3 + ul > li:focus-within:hover {
 }
 
 [role='application']:has(> form > p > [name='pass']) {
-  display: inline-block;
   margin: 0 auto;
+  max-width: 14em;
 }
 
 [role='group'] {
@@ -419,12 +419,15 @@ code.cm-s {
 form .CodeMirror {
   border: 1px solid #000;
   box-sizing: content-box;
-  cursor: text;
   font-size: 80%;
   height: auto;
   line-height: 1.1;
   max-height: 40em;
   min-height: 1em;
+}
+
+form .CodeMirror-code {
+  cursor: text;
 }
 
 form .CodeMirror-scroll {
@@ -434,7 +437,7 @@ form .CodeMirror-scroll {
 
 form .CodeMirror-simplescroll-horizontal,
 form .CodeMirror-simplescroll-vertical {
-  cursor: pointer;
+  cursor: default;
 }
 
 form .CodeMirror * + div {
