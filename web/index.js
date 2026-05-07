@@ -279,6 +279,17 @@ function loadCodeMirror5() {
 }
 
 function onAfterView(path, query, hash, then) {
+    // Create button
+    const createFile = createElement('button', '📄 File');
+    const createFolder = createElement('button', '📁 Folder');
+    createFile.addEventListener('click', function (e) {
+        alert('Create a file!');
+        e.preventDefault();
+    });
+    createFolder.addEventListener('click', function (e) {
+        alert('Create a folder!');
+        e.preventDefault();
+    });
     // Exit button
     const exit = createElement('button', '🔒 Exit');
     exit.addEventListener('click', function (e) {
@@ -289,13 +300,13 @@ function onAfterView(path, query, hash, then) {
     });
     // Search input
     const search = createElement('input', false, {
-        'placeholder': 'Search…',
+        'placeholder': '🔍 Search…',
         'style': 'flex:1;',
         'type': 'text'
     });
     search.addEventListener('keydown', function (e) {
         if ('Enter' === e.key) {
-            alert('Search!');
+            alert('Search a stuff!');
             e.preventDefault();
         }
     });
@@ -303,17 +314,18 @@ function onAfterView(path, query, hash, then) {
     const options = createElement('select', false, {
     });
     Object.entries({
-        asset: 'Asset',
-        cache: 'Cache',
-        comment: 'Comment',
-        page: 'Page',
-        tag: 'Tag',
-        trash: 'Trash',
-        user: 'User',
-        x: 'Extension',
-        y: 'Layout'
-    }).sort(([, v1], [, v2]) => v1.localeCompare(v2)).forEach(v => {
-        const option = createElement('option', '📁 ' + v[1], {
+        asset: ['🗂️', 'Asset'],
+        cache: ['⏰', 'Cache'],
+        comment: ['💬', 'Comment'],
+        image: ['📷', 'Image'],
+        page: ['📑', 'Page'],
+        tag: ['🏷️', 'Tag'],
+        trash: ['♻️', 'Trash'],
+        user: ['👤', 'User'],
+        x: ['🧩', 'Extension'],
+        y: ['✨', 'Layout']
+    }).sort(([, a], [, b]) => a[1].localeCompare(b[1])).forEach(v => {
+        const option = createElement('option', v[1].join(' '), {
             'value': v[0]
         });
         options.append(option);
@@ -335,7 +347,7 @@ function onAfterView(path, query, hash, then) {
         ]);
         options.value = "";
     }
-    application.prepend(createElement('p', [options, search, exit], {
+    application.prepend(createElement('p', [options, createFile, createFolder, search, exit], {
         'style': 'display:flex;gap:0.5rem;'
     }));
     // Calculate folder size then view
@@ -402,7 +414,7 @@ function view(then) {
             viewFormUser(path, query, hash, then);
         }
     } else {
-        query.part ? viewItems(path, query, hash, then) : ('#edit' === hash ? viewItemTextEditor(path, query, hash, then) : viewItem(path, query, hash, then));
+        query.part ? viewItems(path, query, hash, then) : viewItem(path, query, hash, then);
     }
 }
 
@@ -471,6 +483,9 @@ function viewFormUser(path, query, hash, then) {
 }
 
 function viewItem(path, query, hash, then) {
+    if ('#edit' === hash) {
+        return viewItemTextEditor(path, query, hash, then);
+    }
     updateTitle('Loading…', true);
     const itemContent = createElement('code', 'Loading content…');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
