@@ -111,6 +111,8 @@ formUser.addEventListener('submit', function (e) {
         localStorage.setItem('user', r.user);
         updateRoute('/lot/asset?chunk=20&part=1'), view(function () {
             application.prepend(createAlert('Logged in.', 'success'));
+            formUser.elements.key.value = "";
+            formUser.elements.pass.value = "";
         });
     }).catch(e => {
         updateAlert(info, e + "", 'error', 1000);
@@ -794,39 +796,94 @@ let formFileNew, formFolderNew;
 
 const dialogFileNew = createElement('dialog', formFileNew = createElement('form', [
     createElement('p', 'File name:'),
-    createElement('p', createElement('input', false, {
-        'autofocus': "",
-        'name': 'value',
-        'pattern': '([#.@_~]?[a-z\\d]+([_.\\-][a-z\\d]+)*)?\\.\\w+',
-        'placeholder': 'foo-bar.baz',
-        'type': 'text'
-    }))
+    createElement('p', [
+        createElement('input', false, {
+            'autofocus': "",
+            'name': 'name',
+            'pattern': '([#.@_~]?[a-z\\d]+([_.\\-][a-z\\d]+)*)?\\.\\w+',
+            'placeholder': 'foo-bar.baz',
+            'type': 'text'
+        }),
+        createElement('button', 'Create', {
+            'type': 'submit'
+        }),
+        createElement('button', 'Cancel', {
+            'type': 'reset'
+        })
+    ], {
+        'role': 'group'
+    })
 ], {
     'method': 'dialog'
 }));
 
 const dialogFolderNew = createElement('dialog', formFolderNew = createElement('form', [
     createElement('p', 'Folder name:'),
-    createElement('p', createElement('input', false, {
-        'autofocus': "",
-        'name': 'value',
-        'pattern': '([._]?[a-z\\d]+([._\\-][a-z\\d]+)*)([\\\\\\/][._]?[a-z\\d]+([._\\-][a-z\\d]+)*)*',
-        'placeholder': 'foo/bar/baz',
-        'type': 'text'
-    }))
+    createElement('p', [
+        createElement('input', false, {
+            'autofocus': "",
+            'name': 'name',
+            'pattern': '([._]?[a-z\\d]+([._\\-][a-z\\d]+)*)([\\\\\\/][._]?[a-z\\d]+([._\\-][a-z\\d]+)*)*',
+            'placeholder': 'foo/bar/baz',
+            'type': 'text'
+        }),
+        createElement('button', 'Create', {
+            'type': 'submit'
+        }),
+        createElement('button', 'Cancel', {
+            'type': 'reset'
+        })
+    ], {
+        'role': 'group'
+    })
 ], {
     'method': 'dialog'
 }));
 
+formFileNew.addEventListener('reset', function (e) {
+    dialogFileNew.close();
+    this.elements.name.value = "";
+    e.preventDefault();
+});
+
 formFileNew.addEventListener('submit', function (e) {
     dialogFileNew.close();
-    console.log(this.elements.value.value);
+    let path = window.location.pathname.slice(sub.length);
+    let nameParts = this.elements.name.value.split('.'),
+        nameX = nameParts.pop();
+    f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
+        content: "",
+        name: nameParts.join('.'),
+        x: nameX
+    })).then(r => r.json()).then(r => {
+        updateRoute(path + '/' + nameParts.join('.') + '.' + nameX + '#edit');
+        viewItemTextEditor(path + '/' + nameParts.join('.') + '.' + nameX, {}, '#edit');
+    }).catch(console.error);
+    e.preventDefault();
+});
+
+formFolderNew.addEventListener('reset', function (e) {
+    dialogFolderNew.close();
+    this.elements.name.value = "";
     e.preventDefault();
 });
 
 formFolderNew.addEventListener('submit', function (e) {
     dialogFolderNew.close();
-    console.log(this.elements.value.value);
+    let path = window.location.pathname.slice(sub.length);
+    let routeParts = this.elements.name.value.split('/'),
+        routeName = routeParts.pop(),
+        routeParent = routeParts.length ? routeParts.join('/') + '/' : "";
+    f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
+        name: routeName,
+        route: routeParent
+    })).then(r => r.json()).then(r => {
+        updateRoute(path + '/' + routeParent + routeName + '?chunk=20&part=1');
+        viewItems(path + '/' + routeParent + routeName, {
+            chunk: 20,
+            part: 1
+        });
+    }).catch(console.error);
     e.preventDefault();
 });
 

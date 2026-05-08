@@ -135,7 +135,7 @@ body {
 dialog {
   background: #fff;
   border: 1px solid #000;
-  box-shadow: 0 1px 0.5rem rgb(0 0 0 / 0.5);
+  box-shadow: 0 1px 0.25rem rgb(0 0 0 / 0.5);
   inset: 0;
   margin: auto;
   padding: 1rem;
@@ -370,7 +370,7 @@ h3 + ul > li:focus-within:hover {
 }
 
 [aria-label='Pagination'] {
-  display: inline-flex;
+  display: flex;
   gap: 0.5rem;
   padding: 0 0.25rem;
 }
