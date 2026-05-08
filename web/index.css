@@ -21,10 +21,6 @@
   padding: 2rem;
 }
 
-::placeholder {
-  color: #666;
-}
-
 :where(address,
   article,
   aside,
@@ -134,6 +130,20 @@ body {
   margin: 0;
   padding: 0;
   text-align: center;
+}
+
+dialog {
+  background: #fff;
+  border: 1px solid #000;
+  box-shadow: 0 1px 0.5rem rgb(0 0 0 / 0.5);
+  inset: 0;
+  margin: auto;
+  padding: 1rem;
+  text-align: left;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
 }
 
 h1,
@@ -263,7 +273,7 @@ pre code {
   font: inherit;
   margin: 0;
   padding: 0.25rem 0.5rem;
-  width: 10rem;
+  width: 12rem;
 }
 
 :where(button) {
@@ -289,6 +299,11 @@ pre code {
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1rem;
+}
+
+:where(input, textarea):invalid {
+  border-color: #f00;
+  color: #f00;
 }
 
 :where(textarea) {
@@ -386,6 +401,11 @@ h3 + ul > li:focus-within:hover {
   color: #080;
 }
 
+[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 [role='application'] {
   background: #fff;
   border: 1px solid #000;
@@ -401,8 +421,7 @@ h3 + ul > li:focus-within:hover {
 }
 
 [role='application']:has(> form > p > [name='pass']) {
-  margin: 0 auto;
-  max-width: 14em;
+  display: inline-block;
 }
 
 [role='group'] {
@@ -426,7 +445,7 @@ form .CodeMirror {
   font-size: 80%;
   height: auto;
   line-height: 1.1;
-  max-height: 40em;
+  max-height: 60em;
   min-height: 1em;
 }
 

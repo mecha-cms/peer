@@ -1,27 +1,81 @@
 // (() => {
 
 const application = document.querySelector('[role=application]');
-const form = {};
 
 let folderSizeViews = {};
 
-form.blob = createElement('form', false, {
+const formBlob = createElement('form', false, {
     'method': 'post'
 });
 
-form.file = createElement('form', false, {
+const formFile = createElement('form', [
+    createElement('div', createElement('textarea', "", {
+        'name': 'content',
+        'placeholder': 'Content goes here…'
+    })),
+    createElement('p', [
+        createElement('input', false, {
+            'name': 'name',
+            'placeholder': 'foo-bar.baz',
+            'style': 'flex:1;',
+            'type': 'text'
+        }),
+        createElement('button', 'Save', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'set'
+        }),
+        createElement('button', 'Delete', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'let'
+        })
+    ], {
+        'role': 'group'
+    })
+], {
     'method': 'post'
 });
 
-form.folder = createElement('form', false, {
+const formFolder = createElement('form', false, {
     'method': 'post'
 });
 
-form.user = createElement('form', false, {
+const formSearch = createElement('form', createElement('input', false, {
+    'name': 'query',
+    'placeholder': 'Search…',
+    'style': 'width:100%;',
+}), {
+    'method': 'post',
+    'style': 'flex:1;'
+});
+
+const formUser = createElement('form', [
+    createElement('p', createElement('input', false, {
+        'name': 'key',
+        'placeholder': 'User',
+        'type': 'text'
+    })),
+    createElement('p', createElement('input', false, {
+        'name': 'pass',
+        'placeholder': 'Pass',
+        'type': 'password'
+    })),
+    createElement('p', createElement('button', '🔓 Enter', {
+        'type': 'submit'
+    }), {
+        'role': 'group'
+    }),
+    createElement('input', false, {
+        'name': 'peer',
+        'type': 'hidden',
+        'value': 'YOUR_APPLICATION_ID'
+    })
+], {
     'method': 'post'
 });
 
-form.user.addEventListener('submit', function (e) {
+formUser.addEventListener('submit', function (e) {
     // Remove existing alert(s)
     application.querySelectorAll('[role=alert]').forEach(v => v.remove());
     let key = this.elements.key.value,
@@ -163,27 +217,27 @@ function createPager(current, count, chunk, kin, then, first, previous, next, la
         return element;
     }
     if (previous) {
-        root.append(createLink(current === start ? start : current - 1, previous, 'prev', false, current === start), createText(' '));
+        root.append(createLink(current === start ? start : current - 1, previous, 'prev', false, current === start));
     }
     if (first && last) {
         if (min > start) {
             root.append(createLink(start, start + "", 'prev', false, false));
             if (min > start + 1) {
-                root.append(createText(' '), createDots());
+                root.append(createDots());
             }
         }
         for (i = min; i <= max; ++i) {
-            root.append(createText(' '), createLink(i, i + "", current >= i ? 'prev' : 'next', current === i, false));
+            root.append(createLink(i, i + "", current >= i ? 'prev' : 'next', current === i, false));
         }
         if (max < end) {
             if (max < end - 1) {
-                root.append(createText(' '), createDots());
+                root.append(createDots());
             }
-            root.append(createText(' '), createLink(end, end + "", 'next', false, false));
+            root.append(createLink(end, end + "", 'next', false, false));
         }
     }
     if (next) {
-        root.append(createText(' '), createLink(current === end ? end : current + 1, next, 'next', false, current === end));
+        root.append(createLink(current === end ? end : current + 1, next, 'next', false, current === end));
     }
     return root;
 }
@@ -219,18 +273,6 @@ function f3h(path, method = 'GET', headers = {}, body = "") {
     return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
 }
 
-function loadScript(src) {
-    return new Promise((resolve, reject) => {
-        const s = createElement('script', false, {
-            'src': src
-        });
-        s.async = false; // Force execution in order
-        s.onerror = () => reject(new Error('Failed to load ' + src));
-        s.onload = resolve;
-        document.head.append(s);
-    });
-}
-
 function loadCSS(href) {
     return new Promise((resolve, reject) => {
         const l = createElement('link', false, {
@@ -243,7 +285,19 @@ function loadCSS(href) {
     });
 }
 
-let wasLoadCodeMirror5 = false;
+function loadJS(src) {
+    return new Promise((resolve, reject) => {
+        const s = createElement('script', false, {
+            'src': src
+        });
+        s.async = false; // Force execution in order
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        s.onload = resolve;
+        document.head.append(s);
+    });
+}
+
+let wasLoadCodeMirror5;
 function loadCodeMirror5() {
     if (wasLoadCodeMirror5) {
         return Promise.resolve(window.CodeMirror);
@@ -251,26 +305,26 @@ function loadCodeMirror5() {
     const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
     return Promise.all([
         loadCSS(base + '/codemirror.min.css'),
-        loadScript(base + '/codemirror.min.js'),
+        loadJS(base + '/codemirror.min.js'),
         // Order #1
         loadCSS(base + '/addon/scroll/simplescrollbars.min.css'),
-        loadScript(base + '/addon/edit/closebrackets.min.js'),
-        loadScript(base + '/addon/runmode/runmode.min.js'),
-        loadScript(base + '/addon/scroll/simplescrollbars.min.js'),
+        loadJS(base + '/addon/edit/closebrackets.min.js'),
+        loadJS(base + '/addon/runmode/runmode.min.js'),
+        loadJS(base + '/addon/scroll/simplescrollbars.min.js'),
         // Order #2
-        loadScript(base + '/mode/clike/clike.min.js'),
-        loadScript(base + '/mode/css/css.min.js'),
-        loadScript(base + '/mode/javascript/javascript.min.js'),
-        loadScript(base + '/mode/xml/xml.min.js'),
+        loadJS(base + '/mode/clike/clike.min.js'),
+        loadJS(base + '/mode/css/css.min.js'),
+        loadJS(base + '/mode/javascript/javascript.min.js'),
+        loadJS(base + '/mode/xml/xml.min.js'),
         // Order #3
-        loadScript(base + '/mode/htmlmixed/htmlmixed.min.js'),
-        loadScript(base + '/mode/php/php.min.js'),
+        loadJS(base + '/mode/htmlmixed/htmlmixed.min.js'),
+        loadJS(base + '/mode/php/php.min.js'),
         // Order #4
-        loadScript(base + '/mode/markdown/markdown.min.js'),
-        loadScript(base + '/mode/nginx/nginx.min.js'),
-        loadScript(base + '/mode/yaml/yaml.min.js'),
+        loadJS(base + '/mode/markdown/markdown.min.js'),
+        loadJS(base + '/mode/nginx/nginx.min.js'),
+        loadJS(base + '/mode/yaml/yaml.min.js'),
         // Order #5
-        loadScript(base + '/mode/yaml-frontmatter/yaml-frontmatter.min.js')
+        loadJS(base + '/mode/yaml-frontmatter/yaml-frontmatter.min.js')
     ]).then(() => {
         wasLoadCodeMirror5 = true;
         if (!window.CodeMirror) throw new Error('Error loading `CodeMirror` library!');
@@ -278,16 +332,30 @@ function loadCodeMirror5() {
     });
 }
 
+let folders = {}, foldersPromise, wasLoadFolders;
+function loadFolders() {
+    if (wasLoadFolders) {
+        return Promise.resolve(folders);
+    }
+    if (foldersPromise) {
+        return foldersPromise;
+    }
+    foldersPromise = f3h(hub + '/at/lot?limit=9999&x=0').then(r => r.json()).then(r => {
+        return (folders = r);
+    });
+    return foldersPromise;
+}
+
 function onAfterView(path, query, hash, then) {
     // Create button
     const createFile = createElement('button', '📄 File');
     const createFolder = createElement('button', '📁 Folder');
     createFile.addEventListener('click', function (e) {
-        alert('Create a file!');
+        dialogFileNew.showModal();
         e.preventDefault();
     });
     createFolder.addEventListener('click', function (e) {
-        alert('Create a folder!');
+        dialogFolderNew.showModal();
         e.preventDefault();
     });
     // Exit button
@@ -298,56 +366,72 @@ function onAfterView(path, query, hash, then) {
         updateRoute('/enter'), view(onAfterViewFormUser);
         e.preventDefault();
     });
-    // Search input
-    const search = createElement('input', false, {
-        'placeholder': 'Search…',
-        'style': 'flex:1;',
-        'type': 'text'
-    });
-    search.addEventListener('keydown', function (e) {
-        if ('Enter' === e.key) {
-            alert('Search a stuff!');
-            e.preventDefault();
-        }
-    });
     // Folder navigation
     const options = createElement('select', false, {
+        'disabled': ""
     });
-    Object.entries({
-        asset: ['🗂️', 'Asset'],
-        cache: ['⏰', 'Cache'],
-        comment: ['💬', 'Comment'],
-        image: ['📷', 'Image'],
-        page: ['📑', 'Page'],
-        tag: ['🏷️', 'Tag'],
-        trash: ['♻️', 'Trash'],
-        user: ['👤', 'User'],
-        x: ['🧩', 'Extension'],
-        y: ['✨', 'Layout']
-    }).sort(([, a], [, b]) => a[1].localeCompare(b[1])).forEach(v => {
-        const option = createElement('option', v[1].join(' '), {
-            'value': v[0]
+    const value = path.split('/')[2] || "";
+    let selected;
+    loadFolders().then(r => {
+        200 === r.status && r.data.children.map(v => {
+            let icon = '📁',
+                name = v.name,
+                title = name[0].toUpperCase() + name.slice(1);
+            if ('asset' === name) {
+                icon = '🗂️';
+            } else if ('cache' === name) {
+                icon = '⏰';
+            } else if ('comment' === name) {
+                icon = '💬';
+            } else if ('image' === name) {
+                icon = '📷';
+            } else if ('page' === name) {
+                icon = '📑';
+            } else if ('tag' === name) {
+                icon = '🏷️';
+            } else if ('trash' === name) {
+                icon = '♻️';
+            } else if ('user' === name) {
+                icon = '👤';
+            } else if ('x' === name) {
+                icon = '🧩';
+                title = 'Extension';
+            } else if ('y' === name) {
+                icon = '✨';
+                title = 'Layout';
+            }
+            v.icon = icon;
+            v.title = title;
+            return v;
+        }).sort((a, b) => a.title.localeCompare(b.title)).forEach(v => {
+            const option = createElement('option', v.icon + ' ' + v.title, {
+                'selected': value === v.name ? "" : false,
+                'value': v.name
+            });
+            if (!selected && value === v.name) {
+                selected = option;
+            }
+            options.append(option);
         });
-        options.append(option);
-    });
+        if (!selected) {
+            updateElement(options, [
+                createElement('option', '⛔ System', {
+                    'disabled': "",
+                    'value': ""
+                }),
+                createElement('option', '🏠 Home', {
+                    'value': 'asset'
+                })
+            ]);
+            options.value = "";
+        }
+        options.disabled = false;
+    }).catch(console.error);
     options.addEventListener('change', function (e) {
         updateRoute('/lot/' + this.value + '?chunk=20&part=1'), view();
         e.preventDefault();
     });
-    options.value = path.split('/')[2] || "";
-    if ("" === options.value) {
-        updateElement(options, [
-            createElement('option', '⛔ System', {
-                'disabled': "",
-                'value': ""
-            }),
-            createElement('option', '🏠 Home', {
-                'value': 'asset'
-            })
-        ]);
-        options.value = "";
-    }
-    application.prepend(createElement('p', [options, createFile, createFolder, search, exit], {
+    application.prepend(createElement('header', [options, createFile, createFolder, formSearch, exit], {
         'style': 'display:flex;gap:0.5rem;'
     }));
     // Calculate folder size then view
@@ -419,67 +503,19 @@ function view(then) {
 }
 
 function viewFormFile(path, query, hash, then) {
+    updateElement(application, formFile);
     updateTitle('Application · File Editor');
-    const content = createElement('textarea', "", {
-        'name': 'content',
-        'placeholder': 'Content goes here…'
-    });
-    const name = createElement('input', false, {
-        'name': 'name',
-        'placeholder': 'name.txt',
-        'style': 'flex:1;',
-        'type': 'text'
-    });
-    const taskDelete = createElement('button', 'Delete', {
-        'type': 'button'
-    });
-    const taskSave = createElement('button', 'Save', {
-        'type': 'submit',
-    });
-    updateElement(application, updateElement(form.file, [
-        createElement('div', content),
-        createElement('p', [name, taskSave, taskDelete], {
-            'role': 'group'
-        })
-    ]));
-    content.focus();
-    then && then.call(form.file);
-    return form.file;
+    formFile.elements.content.focus();
+    then && then.call(formFile);
+    return formFile;
 }
 
 function viewFormUser(path, query, hash, then) {
+    updateElement(application, formUser);
     updateTitle('Application · Enter');
-    const key = createElement('input', false, {
-        'name': 'key',
-        'placeholder': 'User',
-        'style': 'width:100%;',
-        'type': 'text'
-    });
-    const pass = createElement('input', false, {
-        'name': 'pass',
-        'placeholder': 'Pass',
-        'style': 'width:100%;',
-        'type': 'password'
-    });
-    const peer = createElement('input', false, {
-        'name': 'peer',
-        'type': 'hidden',
-        'value': 'YOUR_APPLICATION_ID'
-    });
-    const task = createElement('button', '🔓 Enter', {
-        'type': 'submit'
-    });
-    updateElement(application, updateElement(form.user, [
-        createElement('p', key),
-        createElement('p', pass),
-        createElement('p', task, {
-            'role': 'group'
-        }),
-        peer
-    ]));
-    key.focus();
-    then && then.call(form.user);
-    return form.user;
+    formUser.elements.key.focus();
+    then && then.call(formUser);
+    return formUser;
 }
 
 function viewItem(path, query, hash, then) {
@@ -505,13 +541,14 @@ function viewItem(path, query, hash, then) {
         }
         updateElement(application, [
             createElement('h3', [
-                '📂 ',
+                '📄 ',
                 createTracesFromString('.' + path)
             ]),
             createElement('pre', itemContent)
         ]);
         updateTitle('Application · File Viewer');
-        if (r.is.text) {
+        onAfterView(path, query, hash, then);
+        if (r.data.is.text) {
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
                     let mode = r.data.type,
@@ -522,7 +559,7 @@ function viewItem(path, query, hash, then) {
                         mode = 'text/x-scss';
                     } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
-                            base: 'text/markdown',
+                            base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
                             name: 'yaml-frontmatter'
                         };
                     }
@@ -539,7 +576,6 @@ function viewItem(path, query, hash, then) {
         } else {
             itemContent.textContent = JSON.stringify(r, null, 2);
         }
-        onAfterView(path, query, hash, then);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error', 1000));
         then && then.call(application);
@@ -564,21 +600,25 @@ function viewItemTextEditor(path, query, hash, then) {
             return;
         }
         const form = viewFormFile(path, query, hash);
-        form.elements.content.parentNode.style.display = r.is.text ? "" : 'none';
+        if (form.$content) {
+            form.$content.toTextArea(); // Destroy!
+        }
+        form.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
         form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateElement(application, [
             createElement('h3', [
-                '📂 ',
+                '📄 ',
                 createTracesFromString('.' + path)
             ]),
             form
         ]);
-        if (r.is.text) {
+        updateTitle('Application · File Editor');
+        onAfterView(path, query, hash, then);
+        if (r.data.is.text) {
             let info = createAlert('Loading CodeMirror library…', 'info');
-            form.elements.content.parentNode.append(info);
+            application.prepend(info);
             form.elements.content.style.display = 'none';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
-                updateTitle('Application · File Editor');
                 if (200 === r.status) {
                     let mode = r.data.type,
                         x = path.split('.').pop();
@@ -588,35 +628,35 @@ function viewItemTextEditor(path, query, hash, then) {
                         mode = 'text/x-scss';
                     } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
-                            base: 'text/markdown',
+                            base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
                             name: 'yaml-frontmatter'
                         };
                     }
                     console.log(mode);
                     form.elements.content.value = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
-                        const t = form.elements.content;
-                        const cm = CodeMirror.fromTextArea(t, {
+                        form.$content = CodeMirror.fromTextArea(form.elements.content, {
                             autoCloseBrackets: true,
+                            autofocus: true,
                             lineNumbers: true,
                             lineWrapping: false,
                             mode,
                             scrollbarStyle: 'simple',
                             viewportMargin: Infinity
                         });
-                        form && form.addEventListener('submit', () => cm.save());
-                        cm.refresh();
+                        form && form.addEventListener('submit', () => form.$content.save());
+                        form.$content.refresh();
                         info.remove();
                     }).catch(e => {
                         application.prepend(createAlert(e + "", 'error', 1000));
                         form.elements.content.style.display = "";
+                        form.elements.content.focus();
                     });
                 } else {
                     updateAlert(info, r.description, 'error', 1000);
                 }
             });
         } else {}
-        onAfterView(path, query, hash, then);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error', 1000));
         then && then.call(application);
@@ -650,7 +690,7 @@ function viewItems(path, query, hash, then) {
             ]),
             listItems
         ]);
-        if (r.has.next || r.has.prev) {
+        if (r.data.has.next || r.data.has.prev) {
             application.append(createElement('nav', [
                 createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
                     if (current || disabled) {
@@ -749,5 +789,47 @@ window.addEventListener('hashchange', onHashChange);
 window.addEventListener('popstate', onPopState);
 
 view();
+
+let formFileNew, formFolderNew;
+
+const dialogFileNew = createElement('dialog', formFileNew = createElement('form', [
+    createElement('p', 'File name:'),
+    createElement('p', createElement('input', false, {
+        'autofocus': "",
+        'name': 'value',
+        'pattern': '([#.@_~]?[a-z\\d]+([_.\\-][a-z\\d]+)*)?\\.\\w+',
+        'placeholder': 'foo-bar.baz',
+        'type': 'text'
+    }))
+], {
+    'method': 'dialog'
+}));
+
+const dialogFolderNew = createElement('dialog', formFolderNew = createElement('form', [
+    createElement('p', 'Folder name:'),
+    createElement('p', createElement('input', false, {
+        'autofocus': "",
+        'name': 'value',
+        'pattern': '([._]?[a-z\\d]+([._\\-][a-z\\d]+)*)([\\\\\\/][._]?[a-z\\d]+([._\\-][a-z\\d]+)*)*',
+        'placeholder': 'foo/bar/baz',
+        'type': 'text'
+    }))
+], {
+    'method': 'dialog'
+}));
+
+formFileNew.addEventListener('submit', function (e) {
+    dialogFileNew.close();
+    console.log(this.elements.value.value);
+    e.preventDefault();
+});
+
+formFolderNew.addEventListener('submit', function (e) {
+    dialogFolderNew.close();
+    console.log(this.elements.value.value);
+    e.preventDefault();
+});
+
+document.body.append(dialogFileNew, dialogFolderNew);
 
 // })();
