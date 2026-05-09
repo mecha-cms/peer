@@ -2,7 +2,8 @@
 
 const application = document.querySelector('[role=application]');
 
-let folderSizeViews = {};
+let folderSizeViews = {},
+    pageType = false;
 
 const formBlob = createElement('form', false, {
     'method': 'post'
@@ -156,7 +157,7 @@ function updateElement(element, content, attributes) {
             if (false === value || null === value) {
                 element.removeAttribute(name);
             } else {
-                element.setAttribute(name, value + "");
+                element.setAttribute(name, true === value ? name : value + "");
             }
         }
     }
@@ -259,20 +260,22 @@ function createTracesFromString(path) {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
                 'href': sub + trace.slice(1) + '?chunk=20&part=1'
             });
-            a.addEventListener('click', onClickAnchor);
+            a.addEventListener('click', onClick);
             span.append('/', a);
         }
     });
     return span;
 }
 
-function f3h(path, method = 'GET', headers = {}, body = "") {
+let abortController = new AbortController;
+
+function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
     const token = localStorage.getItem('hub');
     headers = Object.assign({
         'authorization': 'bearer ' + token,
         'content-type': 'application/json'
     }, headers);
-    return fetch(path, 'GET' === method || 'HEAD' === method ? { headers, method } : { body, headers, method });
+    return fetch(path, Object.assign({ headers, method }, options, 'GET' === method || 'HEAD' === method ? {} : { body }));
 }
 
 function loadCSS(href) {
@@ -370,7 +373,7 @@ function onAfterView(path, query, hash, then) {
     });
     // Folder navigation
     const options = createElement('select', false, {
-        'disabled': ""
+        'disabled': true
     });
     const value = path.split('/')[2] || "";
     let selected;
@@ -418,7 +421,7 @@ function onAfterView(path, query, hash, then) {
         if (!selected) {
             updateElement(options, [
                 createElement('option', '⛔ System', {
-                    'disabled': "",
+                    'disabled': true,
                     'value': ""
                 }),
                 createElement('option', '🏠 Home', {
@@ -443,11 +446,11 @@ function onAfterView(path, query, hash, then) {
             if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
                 return; // Hidden from view
             }
-            f3h(hub + '/%2B/size' + route).then(r => r.json()).then(r => {
+            f3h(hub + '/%2B/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => r.json()).then(r => {
                 if (200 === r.status) {
                     listItemSize.innerHTML = r.data.size;
                 }
-            });
+            }).catch(e => {});
         })();
     }
     then && then.call(application);
@@ -460,7 +463,7 @@ function onAfterViewFormUser(path, query, hash, then) {
     then && then.call(application);
 }
 
-function onClickAnchor(e) {
+function onClick(e) {
     updateRoute(this.href), view();
     e.preventDefault();
 }
@@ -489,6 +492,8 @@ function openBlob(path, query, hash) {
 }
 
 function view(then) {
+    abortController.abort();
+    abortController = new AbortController;
     const hash = window.location.hash;
     const path = window.location.pathname.slice(sub.length);
     const query = Object.fromEntries(new URLSearchParams(window.location.search));
@@ -513,6 +518,7 @@ function viewFormFile(path, query, hash, then) {
 }
 
 function viewFormUser(path, query, hash, then) {
+    pageType = false;
     updateElement(application, formUser);
     updateTitle('Application · Enter');
     formUser.elements.key.focus();
@@ -521,6 +527,7 @@ function viewFormUser(path, query, hash, then) {
 }
 
 function viewItem(path, query, hash, then) {
+    pageType = 'file';
     if ('#edit' === hash) {
         return viewItemTextEditor(path, query, hash, then);
     }
@@ -585,6 +592,7 @@ function viewItem(path, query, hash, then) {
 }
 
 function viewItemTextEditor(path, query, hash, then) {
+    pageType = 'file';
     updateTitle('Loading…', true);
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
         console.log(r);
@@ -666,6 +674,7 @@ function viewItemTextEditor(path, query, hash, then) {
 }
 
 function viewItems(path, query, hash, then) {
+    pageType = 'folder';
     updateTitle('Loading…', true);
     const listItems = createElement('ul');
     f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
@@ -698,7 +707,7 @@ function viewItems(path, query, hash, then) {
                     if (current || disabled) {
                         this.addEventListener('click', e => e.preventDefault());
                     } else {
-                        this.addEventListener('click', onClickAnchor);
+                        this.addEventListener('click', onClick);
                     }
                     this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
                 }, 'First', 'Previous', 'Next', 'Last')
@@ -748,7 +757,7 @@ function viewItems(path, query, hash, then) {
             listItemLink.addEventListener('click', v.is.blob ? function (e) {
                 openBlob(this.href);
                 e.preventDefault();
-            } : onClickAnchor);
+            } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
                 alert('Delete');
                 e.preventDefault();
@@ -798,10 +807,11 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
     createElement('p', 'File name:'),
     createElement('p', [
         createElement('input', false, {
-            'autofocus': "",
+            'autofocus': true,
             'name': 'name',
             'pattern': '([#.@_~]?[a-z\\d]+([_.\\-][a-z\\d]+)*)?\\.\\w+',
             'placeholder': 'foo-bar.baz',
+            'required': true,
             'type': 'text'
         }),
         createElement('button', 'Create', {
@@ -818,13 +828,14 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
 }));
 
 const dialogFolderNew = createElement('dialog', formFolderNew = createElement('form', [
-    createElement('p', 'Folder name:'),
+    createElement('p', 'Folder name or path:'),
     createElement('p', [
         createElement('input', false, {
-            'autofocus': "",
+            'autofocus': true,
             'name': 'name',
             'pattern': '([._]?[a-z\\d]+([._\\-][a-z\\d]+)*)([\\\\\\/][._]?[a-z\\d]+([._\\-][a-z\\d]+)*)*',
             'placeholder': 'foo/bar/baz',
+            'required': true,
             'type': 'text'
         }),
         createElement('button', 'Create', {

@@ -9,9 +9,6 @@ $sub = '/peer/web';
   <head>
     <meta charset="utf-8">
     <title>Loading…</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect">
-    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
-    <link href="https://fonts.googleapis.com/css2?display=swap&family=Noto+Color+Emoji" rel="stylesheet">
     <link href="<?= $sub; ?>/index.css" rel="stylesheet">
   </head>
   <body>

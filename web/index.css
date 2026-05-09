@@ -16,7 +16,7 @@
 :root {
   background: #ccc;
   color: #000;
-  font: 400 normal 16px/1.5 serif, 'Noto Color Emoji';
+  font: 400 normal 16px/1.5 serif;
   margin: 0;
   padding: 2rem;
 }
@@ -281,7 +281,7 @@ pre code {
 }
 
 :where(button, select) {
-  background-color: #ddd;
+  background-color: #eee;
   cursor: pointer;
 }
 
@@ -290,7 +290,7 @@ pre code {
 }
 
 :where(button, select):active {
-  background-color: #ccc;
+  background-color: #ddd;
 }
 
 :where(select),
