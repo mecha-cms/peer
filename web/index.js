@@ -831,6 +831,11 @@ function viewItems(path, query, hash, then) {
     const listItems = createElement('ul');
     f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
         console.table([{'Request':'GET','Response':r}]);
+        if (400 === r.status) {
+            updateElement(application, createAlert(r.description, 'error'));
+            updateTitle('Application · Error', false, applicationMain);
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
