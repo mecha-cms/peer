@@ -578,7 +578,9 @@ function onEnter(path, query, hash, then) {
             options.value = "";
         }
         options.disabled = false;
-    }).catch(console.error);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+    });
     options.addEventListener('change', function (e) {
         let path = '/lot/' + this.value, query;
         updateRoute(toPath(path) + toQuery(query = {
@@ -775,7 +777,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         updateBusyState(false, applicationAside);
         updateElement(applicationAside, [listItems]);
         let folderSizeViews = {};
-        r.data.children.forEach(v => {
+        r.data.children.filter(v => v.is.text).forEach(v => {
             const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
                 'aria-current': path === v.route ? 'page' : false,
                 'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
@@ -1231,7 +1233,9 @@ formFileNew.addEventListener('submit', function (e) {
         } else {
             dialogFileNew.prepend(createAlert(r.description, 'error'));
         }
-    }).catch(console.error);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+    });
     e.preventDefault();
 });
 
@@ -1269,7 +1273,9 @@ formFolderNew.addEventListener('submit', function (e) {
         } else {
             dialogFolderNew.prepend(createAlert(r.description, 'error'));
         }
-    }).catch(console.error);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+    });
     e.preventDefault();
 });
 
