@@ -34,12 +34,12 @@ const formFile = createElement('form', [
         createElement('button', 'Save', {
             'name': 'task',
             'type': 'submit',
-            'value': 'set'
+            'value': 'update'
         }),
         createElement('button', 'Delete', {
             'name': 'task',
             'type': 'submit',
-            'value': 'let'
+            'value': 'delete'
         })
     ], {
         'role': 'group'
@@ -88,6 +88,42 @@ const formUser = createElement('form', [
     'method': 'post'
 });
 
+formFile.addEventListener('submit', function (e) {
+    clearAlerts();
+    let content = 'content' in this.elements ? this.elements.content.value : false,
+        name = this.elements.name.value,
+        task = this.getAttribute('data-task') || 'update';
+    console.log({ content, name, task });
+    if ('delete' === task) {
+        f3h(this.action, 'DELETE').then(r => r.json()).then(r => {
+            console.info('DELETE', this.action, r);
+            if (200 === r.status) {
+                let path = fromPath(toParent(this.action), hub + '/at'), query;
+                updateRoute(toPath(path) + toQuery(query = {
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                }));
+                viewItems(path, query, "", function () {
+                    application.prepend(createAlert(r.description, 'success'));
+                });
+            }
+        }).catch(e => {
+            application.prepend(createAlert(e + "", 'error'));
+        });
+    } else if ('update' === task) {
+        console.info('UPDATE');
+    } else {
+        // Bad request!
+    }
+    e.preventDefault();
+});
+
+formFile.querySelectorAll('[type=submit]').forEach(v => {
+    v.addEventListener('click', function () {
+        this.form.setAttribute('data-task', this.value);
+    });
+});
+
 formUser.addEventListener('submit', function (e) {
     clearAlerts();
     let key,
@@ -131,7 +167,7 @@ formUser.addEventListener('submit', function (e) {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             };
-        updateTitle(false, false, this); // Remove `aria-busy` in the form
+        updateTitle(false, false, this); // Remove `aria-busy` from the form
         onEnter(path, query, hash, function () {
             viewItems(path, query, hash, function () {
                 application.prepend(createAlert('Logged in.', 'success'));
@@ -171,8 +207,8 @@ function fromHash(hash) {
     return hash.slice(1);
 }
 
-function fromPath(path) {
-    return path.slice(sub.length);
+function fromPath(path, base) {
+    return path.slice((base || sub).length);
 }
 
 function fromQuery(query) {
@@ -194,12 +230,20 @@ function fromValue(v) {
     return false === v ? 'false' : (null === v ? 'null' : (true === v ? 'true' : ('number' === typeof v ? v + "" : v)));
 }
 
+function toBase(path) {
+    return path.split('/').pop();
+}
+
 function toValue(v) {
     return 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
 }
 
 function toHash(hash) {
     return '#' + hash;
+}
+
+function toParent(path) {
+    return path.slice(0, path.lastIndexOf('/'));
 }
 
 function toPath(path) {
@@ -318,17 +362,16 @@ function createTracesFromString(path) {
         traces = path.split('/'),
         tracesMax = traces.length;
     traces.forEach((v, k) => {
-        trace += '/' + (v = decodeURIComponent(v));
-        if (k < 2) {
-            k > 0 && span.append('/');
-            span.append(v);
+        if (0 === k) {
+            span.append(createElement('span', v));
         } else {
+            trace += '/' + (v = decodeURIComponent(v));
             const a = createElement('a', v, {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
-                'href': toPath(trace.slice(1)) + toQuery({
+                'href': toPath(trace.slice(1)) + (tracesMax === k + 1 ? "" : toQuery({
                     chunk: pageChunkDefault,
                     part: pagePartDefault
-                })
+                }))
             });
             a.addEventListener('click', onClick);
             span.append('/', a);
@@ -422,7 +465,10 @@ function loadFolders() {
     if (foldersPromise) {
         return foldersPromise;
     }
-    foldersPromise = f3h(hub + '/at/lot?limit=9999&x=0').then(r => r.json()).then(r => {
+    foldersPromise = f3h(hub + '/at/lot' + toQuery({
+        limit: false,
+        x: 0
+    })).then(r => r.json()).then(r => {
         wasLoadFolders = true;
         return (folders = r);
     });
@@ -517,10 +563,12 @@ function onEnter(path, query, hash, then) {
         options.disabled = false;
     }).catch(console.error);
     options.addEventListener('change', function (e) {
-        updateRoute(toPath('/lot/' + this.value) + toQuery({
+        let path = '/lot/' + this.value, query;
+        updateRoute(toPath(path) + toQuery(query = {
             chunk: pageChunkDefault,
             part: pagePartDefault
-        })), view();
+        }));
+        viewItems(path, query);
         e.preventDefault();
     });
     updateElement(applicationHeader, createElement('div', [options, createFile, createFolder, formSearch, exit], {
@@ -691,12 +739,12 @@ function viewItemFileEditorText(path, query, hash, then) {
     pageType = 'file';
     updateTitle('Loading…', true, applicationAside);
     const listItems = createElement('ul');
-    f3h(hub + '/at' + path.slice(0, path.lastIndexOf('/')) + toQuery({
-        limit: 9999,
+    f3h(hub + '/at' + toParent(path) + toQuery({
+        limit: false,
         x: 1
     })).then(r => r.json()).then(r => {
-        console.info('GET', hub + '/at' + path.slice(0, path.lastIndexOf('/')) + toQuery({
-            limit: 9999,
+        console.info('GET', hub + '/at' + toParent(path) + toQuery({
+            limit: false,
             x: 1
         }), r);
         // TODO: Handle stale token
@@ -821,16 +869,13 @@ function viewItemFileEditorText(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        // if (formFile.$c) {
-        //     formFile.$c.toTextArea(); // Destroy!
-        //     delete formFile.$c;
-        // }
+        formFile.action = hub + '/at' + path;
         // Use the previous `CodeMirror` instance
         formFile.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
         formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateElement(applicationMain, [
             createElement('h3', [
-                (r.data.is.file ? '📄' : '📁') + ' ',
+                (r.data.is.file ? '📄' : '📂') + ' ',
                 createTracesFromString('.' + path)
             ]),
             formFile
@@ -1018,7 +1063,7 @@ function viewItems(path, query, hash, then) {
                     console.info('DELETE', hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), r);
                     if (200 === r.status) {
                         viewItems(path, query, hash, function () {
-                            application.prepend(createAlert(r.description, 'success'));
+                            // application.prepend(createAlert(r.description, 'success'));
                         });
                     }
                 }).catch(e => {
@@ -1146,6 +1191,7 @@ formFileNew.addEventListener('submit', function (e) {
         name: nameParts.join('.'),
         x: nameX
     })).then(r => r.json()).then(r => {
+        console.info('PUT', hub + '/at' + path, r);
         if (201 === r.status) {
             dialogFileNew.close();
             marks[r.data.route] = 1;
@@ -1153,8 +1199,7 @@ formFileNew.addEventListener('submit', function (e) {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }, "", function () {
-                application.prepend(createAlert(r.description, 'success'));
-                console.info('PUT', hub + '/at' + path, r);
+                // application.prepend(createAlert(r.description, 'success'));
             });
             this.reset();
         } else {
@@ -1171,28 +1216,28 @@ formFolderNew.addEventListener('reset', function () {
 formFolderNew.addEventListener('submit', function (e) {
     clearAlerts();
     let path = fromPath(window.location.pathname);
-    let routeParts = this.elements.name.value.split('/'),
-        routeName = routeParts.pop(),
-        routeParent = routeParts.length ? routeParts.join('/') + '/' : "";
+    let route = this.elements.name.value,
+        routeName = toBase(route),
+        routeParent = toParent(route);
     f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
         name: routeName,
         route: routeParent
     })).then(r => r.json()).then(r => {
+        console.info('PUT', hub + '/at' + path, r);
         if (201 === r.status) {
             dialogFolderNew.close();
-            routeParts.concat(routeName).map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
+            route.split('/').map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
                 marks[path + '/' + s] = 1;
             });
-            updateRoute(toPath(path + '/' + routeParent + routeName) + toQuery({
+            updateRoute(toPath(path + '/' + route) + toQuery({
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }));
-            viewItems(path + '/' + routeParent + routeName, {
+            viewItems(path + '/' + route, {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }, "", function () {
-                application.prepend(createAlert(r.description, 'success'));
-                console.info('PUT', hub + '/at' + path, r);
+                // application.prepend(createAlert(r.description, 'success'));
             });
             this.reset();
         } else {
