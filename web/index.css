@@ -246,6 +246,11 @@ dt {
   font-size: 1.25em;
 }
 
+label {
+  cursor: pointer;
+  user-select: none;
+}
+
 ol,
 ul {
   margin-left: 2rem;
@@ -364,7 +369,8 @@ pre code {
 [aria-disabled] {
   color: inherit;
   cursor: not-allowed;
-  filter: grayscale(50%);
+  filter: grayscale(1);
+  user-select: none;
 }
 
 [role='alert'] {

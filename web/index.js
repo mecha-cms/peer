@@ -174,7 +174,7 @@ function fromPath(path) {
 
 function fromQuery(query) {
     return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
-        v = 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
+        v = toValue(v);
         if ('[]' === k.slice(-2)) {
             if (!a[k = k.slice(0, -2)]) {
                 a[k] = [];
@@ -187,6 +187,14 @@ function fromQuery(query) {
     }, {});
 }
 
+function fromValue(v) {
+    return false === v ? 'false' : (null === v ? 'null' : (true === v ? 'true' : ('number' === typeof v ? v + "" : v)));
+}
+
+function toValue(v) {
+    return 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
+}
+
 function toHash(hash) {
     return '#' + hash;
 }
@@ -196,7 +204,7 @@ function toPath(path) {
 }
 
 function toQuery(lot) {
-    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(x => [k + '[]', x]) : [[k, v]]));
+    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
 }
 
 function updateAlert(element, text, type, timeOut) {
@@ -405,7 +413,7 @@ function loadCodeMirror5() {
 
 let folders = {}, foldersPromise, wasLoadFolders;
 function loadFolders() {
-    if (wasLoadFolders) {
+    if (wasLoadFolders && Object.keys(folders).length > 0) {
         return Promise.resolve(folders);
     }
     if (foldersPromise) {
@@ -964,13 +972,18 @@ function viewItems(path, query, hash, then) {
                 'href': hub + '/blob' + v.route,
                 'title': 'View'
             });
-            const listItemLinks = createElement('span', [
-                v.is.folder ? listItemLinkOpen : listItemLinkView,
-                listItemLinkEdit,
-                listItemLinkDelete
-            ], {
+            const listItemLinks = createElement('span', v.is.folder ? listItemLinkOpen : listItemLinkView, {
                 'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
             });
+            if ('..' !== v.name) {
+                listItemLinks.append(listItemLinkEdit, listItemLinkDelete);
+            } else {
+                listItemLinks.append(createElement('span', listItemLinkEdit.textContent, {
+                    'aria-disabled': 'true'
+                }), createElement('span', listItemLinkDelete.textContent, {
+                    'aria-disabled': 'true'
+                }));
+            }
             const listItemSize = createElement('span', v.size ?? '…', {
                 'role': 'status'
             });
