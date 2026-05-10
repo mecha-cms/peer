@@ -95,8 +95,7 @@ formFile.addEventListener('submit', function (e) {
         task = this.getAttribute('data-task') || 'update';
     console.log({ content, name, task });
     if ('delete' === task) {
-        f3h(this.action, 'DELETE').then(r => r.json()).then(r => {
-            console.info('DELETE', this.action, r);
+        loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
                 let path = fromPath(toParent(this.action), hub + '/at'), query;
                 updateRoute(toPath(path) + toQuery(query = {
@@ -136,16 +135,14 @@ formUser.addEventListener('submit', function (e) {
     }
     const info = createAlert('Logging in…', 'info');
     application.prepend(info);
-    updateTitle('Logging in…', true, this);
-    fetch(hub + '/enter', {
-        body: JSON.stringify({ key, pass, peer }),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST'
-    }).then(r => r.json()).then(r => {
+    updateBusyState(true, this);
+    updateTitle('Logging in…');
+    loadJSON(hub + '/enter', 'POST', { 'content-type': 'application/json' }, { key, pass, peer }).then(r => {
         this.reset();
         if (200 !== r.status) {
             updateAlert(info, r.description, 'error');
-            updateTitle('Application · Error', false, this);
+            updateBusyState(false, this);
+            updateTitle('Application · Error');
             this.reset();
             this.elements.key.value = k;
             if (404 === r.status) {
@@ -156,7 +153,6 @@ formUser.addEventListener('submit', function (e) {
             }
             return;
         }
-        console.info('POST', hub + '/enter', r);
         // For a more secure application, you may need to store the hub token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
@@ -167,7 +163,7 @@ formUser.addEventListener('submit', function (e) {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             };
-        updateTitle(false, false, this); // Remove `aria-busy` from the form
+        updateBusyState(false, this);
         onEnter(path, query, hash, function () {
             viewItems(path, query, hash, function () {
                 application.prepend(createAlert('Logged in.', 'success'));
@@ -243,7 +239,8 @@ function toHash(hash) {
 }
 
 function toParent(path) {
-    return path.slice(0, path.lastIndexOf('/'));
+    let last = path.lastIndexOf('/');
+    return -1 !== last ? path.slice(0, last) : "";
 }
 
 function toPath(path) {
@@ -263,6 +260,12 @@ function updateAlert(element, text, type, timeOut) {
         window.setTimeout(() => element.remove(), timeOut);
     }
     return element;
+}
+
+function updateBusyState(busy, node) {
+    updateElement(node || document.documentElement, false, {
+        'aria-busy': busy ? 'true' : false
+    })
 }
 
 function updateElement(element, content, attributes) {
@@ -287,11 +290,8 @@ function updateElement(element, content, attributes) {
     return element;
 }
 
-function updateTitle(text, busy, node) {
-    text && (document.title = text);
-    updateElement(node || document.documentElement, false, {
-        'aria-busy': busy ? 'true' : false
-    });
+function updateTitle(text, busy) {
+    document.title = text;
 }
 
 function updateRoute(route) {
@@ -383,6 +383,9 @@ function createTracesFromString(path) {
 let abortController = new AbortController;
 
 function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
+    if ('string' !== typeof body) {
+        body = JSON.stringify(body);
+    }
     const token = localStorage.getItem('hub');
     headers = Object.assign({
         'authorization': 'bearer ' + token,
@@ -413,6 +416,20 @@ function loadJS(src) {
         s.onload = resolve;
         document.head.append(s);
     });
+}
+
+function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
+    return f3h(path, method, headers, body, options).then(r => r.json().then(r => {
+        console.groupCollapsed('🌐 ' + method + ' ' + path);
+        if ('GET' === method && -1 !== path.indexOf('?')) {
+            console.log('📤', fromQuery(path.split('?').pop()));
+        } else if (body) {
+            console.log('📤', body);
+        }
+        console.log('📥', r);
+        console.groupEnd();
+        return r;
+    }));
 }
 
 let wasLoadCodeMirror5;
@@ -459,16 +476,16 @@ function loadCodeMirror5() {
 
 let folders = {}, foldersPromise, wasLoadFolders;
 function loadFolders() {
-    if (wasLoadFolders && Object.keys(folders).length > 0) {
+    if (wasLoadFolders) {
         return Promise.resolve(folders);
     }
     if (foldersPromise) {
         return foldersPromise;
     }
-    foldersPromise = f3h(hub + '/at/lot' + toQuery({
+    (foldersPromise = loadJSON(hub + '/at/lot' + toQuery({
         limit: false,
         x: 0
-    })).then(r => r.json()).then(r => {
+    }))).then(r => {
         wasLoadFolders = true;
         return (folders = r);
     });
@@ -519,7 +536,7 @@ function onEnter(path, query, hash, then) {
             } else if ('comment' === name) {
                 icon = '💬';
             } else if ('image' === name) {
-                icon = '📷';
+                icon = '🌄';
             } else if ('page' === name) {
                 icon = '📑';
             } else if ('tag' === name) {
@@ -581,10 +598,8 @@ function onEnter(path, query, hash, then) {
 function onExit(path, query, hash, then) {
     updateElement(application, null);
     updateTitle('Application · Enter');
-    then && then.call(application);
-    // Force to load the folder(s) again on enter
-    folders = {};
     wasLoadFolders = false;
+    then && then.call(application);
 }
 
 function onExitAfter(path, query, hash, then) {
@@ -656,10 +671,10 @@ function viewEnter(path, query, hash, then) {
 function viewItem(path, query, hash, then) {
     clearAlerts();
     pageType = 'file';
-    updateTitle('Loading…', true, applicationMain);
+    updateBusyState(true, applicationMain);
+    updateTitle('Loading…');
     const itemContent = createElement('code', 'Loading content…');
-    f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.info('GET', hub + '/at' + path, r);
+    loadJSON(hub + '/at' + path).then(r => {
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -671,6 +686,7 @@ function viewItem(path, query, hash, then) {
             onExit(path, query, hash, function () {
                 application.prepend(createAlert(r.description, 'error'));
             });
+            updateBusyState(false, applicationMain);
             updateTitle('Application · Forbidden');
             return;
         }
@@ -678,6 +694,7 @@ function viewItem(path, query, hash, then) {
             onExit(path, query, hash, function () {
                 application.prepend(createAlert(r.description, 'error'));
             });
+            updateBusyState(false, applicationMain);
             updateTitle('Application · Not Found');
             return;
         }
@@ -688,21 +705,22 @@ function viewItem(path, query, hash, then) {
             ]),
             createElement('pre', itemContent)
         ]);
-        updateTitle('Application · File Viewer', false, applicationMain);
+        updateBusyState(false, applicationMain);
+        updateTitle('Application · File Viewer');
         if (r.data.is.text) {
-            f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
+            loadJSON(hub + '/%2B/content' + path).then(r => {
                 if (200 === r.status) {
                     let mode = r.data.type,
                         x = path.split('.').pop();
-                    if ('less' === x) {
-                        mode = 'text/x-less';
-                    } else if ('scss' === x) {
-                        mode = 'text/x-scss';
+                    if (['less', 'scss'].includes(x)) {
+                        mode = 'css';
                     } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
-                            base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
+                            base: 'txt' === x ? 'null' : 'markdown',
                             name: 'yaml-frontmatter'
                         };
+                    } else if (['yaml', 'yml'].includes(x)) {
+                        mode = 'yaml';
                     }
                     console.log(mode);
                     itemContent.classList.add('cm-s', 'cm-s-default');
@@ -737,16 +755,13 @@ function viewItemFolderEditor(path, query, hash, then) {
 function viewItemFileEditorText(path, query, hash, then) {
     clearAlerts();
     pageType = 'file';
-    updateTitle('Loading…', true, applicationAside);
+    updateBusyState(true, applicationAside);
+    updateTitle('Loading…');
     const listItems = createElement('ul');
-    f3h(hub + '/at' + toParent(path) + toQuery({
+    loadJSON(hub + '/at' + toParent(path) + toQuery({
         limit: false,
         x: 1
-    })).then(r => r.json()).then(r => {
-        console.info('GET', hub + '/at' + toParent(path) + toQuery({
-            limit: false,
-            x: 1
-        }), r);
+    })).then(r => {
         // TODO: Handle stale token
         if (401 === r.status) {
             return;
@@ -757,7 +772,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         if (404 === r.status) {
             return;
         }
-        updateTitle(false, false, applicationAside); // Remove `aria-busy` in the form
+        updateBusyState(false, applicationAside);
         updateElement(applicationAside, [listItems]);
         let folderSizeViews = {};
         r.data.children.forEach(v => {
@@ -767,7 +782,7 @@ function viewItemFileEditorText(path, query, hash, then) {
                     chunk: pageChunkDefault,
                     part: pagePartDefault
                 }) : toHash('update')),
-                'title': v.is.blob ? 'Open' : 'Edit'
+                'title': (v.is.blob ? 'Open' : 'Edit') + ' ' + v.route
             });
             const listItemSize = createElement('span', v.size ?? '…', {
                 'role': 'status'
@@ -785,10 +800,12 @@ function viewItemFileEditorText(path, query, hash, then) {
                 updateElement(this, false, {
                     'aria-current': 'page'
                 });
-                updateTitle('Loading…', true, applicationMain);
+                updateBusyState(true, applicationMain);
+                updateRoute(this.getAttribute('href'));
+                updateTitle('Loading…');
                 let fileRoute = fromPath(this.getAttribute('href')).slice(0, -7),
                     fileName = decodeURIComponent(fileRoute.split('/').pop());
-                f3h(hub + '/%2B/content' + fileRoute).then(r => r.json()).then(r => {
+                loadJSON(hub + '/%2B/content' + fileRoute).then(r => {
                     // TODO: Handle stale token
                     if (401 === r.status) {
                         localStorage.removeItem('hub');
@@ -801,18 +818,19 @@ function viewItemFileEditorText(path, query, hash, then) {
                             '📄 ',
                             createTracesFromString('.' + fileRoute)
                         ]);
-                        updateTitle('Application · File Editor', false, applicationMain);
+                        updateBusyState(false, applicationMain);
+                        updateTitle('Application · File Editor');
                         let mode = r.data.type,
                             x = fileName.split('.').pop();
-                        if ('less' === x) {
-                            mode = 'text/x-less';
-                        } else if ('scss' === x) {
-                            mode = 'text/x-scss';
+                        if (['less', 'scss'].includes(x)) {
+                            mode = 'css';
                         } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                             mode = {
-                                base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
+                                base: 'txt' === x ? 'null' : 'markdown',
                                 name: 'yaml-frontmatter'
                             };
+                        } else if (['yaml', 'yml'].includes(x)) {
+                            mode = 'yaml';
                         }
                         console.log(mode);
                         if (formFile.$c) {
@@ -827,7 +845,7 @@ function viewItemFileEditorText(path, query, hash, then) {
                         }
                         formFile.elements.name.value = fileName;
                     } else {
-                        updateTitle(false, false, applicationMain); // Remove `aria-busy`
+                        updateBusyState(false, applicationMain);
                     }
                 }).catch(e => {
                     application.prepend(createAlert(e + "", 'error'));
@@ -845,9 +863,9 @@ function viewItemFileEditorText(path, query, hash, then) {
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     });
-    updateTitle('Loading…', true, applicationMain);
-    f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.info('GET', hub + '/at' + path, r);
+    updateBusyState(true, applicationMain);
+    updateTitle('Loading…');
+    loadJSON(hub + '/at' + path).then(r => {
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -859,6 +877,7 @@ function viewItemFileEditorText(path, query, hash, then) {
             onExit(path, query, hash, function () {
                 application.prepend(createAlert(r.description, 'error'));
             });
+            updateBusyState(false, applicationMain);
             updateTitle('Application · Forbidden');
             return;
         }
@@ -866,6 +885,7 @@ function viewItemFileEditorText(path, query, hash, then) {
             onExit(path, query, hash, function () {
                 application.prepend(createAlert(r.description, 'error'));
             });
+            updateBusyState(false, applicationMain);
             updateTitle('Application · Not Found');
             return;
         }
@@ -880,22 +900,23 @@ function viewItemFileEditorText(path, query, hash, then) {
             ]),
             formFile
         ]);
-        updateTitle('Application · File Editor', false, applicationMain);
+        updateBusyState(false, applicationMain);
+        updateTitle('Application · File Editor');
         if (r.data.is.text) {
             formFile.elements.content.style.display = 'none';
-            f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
+            loadJSON(hub + '/%2B/content' + path).then(r => {
                 if (200 === r.status) {
                     let mode = r.data.type,
                         x = path.split('.').pop();
-                    if ('less' === x) {
-                        mode = 'text/x-less';
-                    } else if ('scss' === x) {
-                        mode = 'text/x-scss';
+                    if (['less', 'scss'].includes(x)) {
+                        mode = 'css';
                     } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
                         mode = {
-                            base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
+                            base: 'txt' === x ? 'null' : 'markdown',
                             name: 'yaml-frontmatter'
                         };
+                    } else if (['yaml', 'yml'].includes(x)) {
+                        mode = 'yaml';
                     }
                     console.log(mode);
                     formFile.elements.content.value = r.data.content;
@@ -948,19 +969,19 @@ function viewItemFileEditorText(path, query, hash, then) {
 function viewItems(path, query, hash, then) {
     clearAlerts();
     pageType = 'folder';
-    updateTitle('Loading…', true, applicationMain);
+    updateBusyState(true, applicationMain);
+    updateTitle('Loading…');
     const listItems = createElement('ul');
-    f3h(hub + '/at' + path + toQuery({
+    loadJSON(hub + '/at' + path + toQuery({
         chunk: query.chunk,
         part: query.part
-    })).then(r => r.json()).then(r => {
-        console.info('GET', hub + '/at' + path + toQuery({
-            chunk: query.chunk,
-            part: query.part
-        }), r);
+    })).then(r => {
         if (400 === r.status) {
-            updateElement(application, createAlert(r.description, 'error'));
-            updateTitle('Application · Error', false, applicationMain);
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Error');
             return;
         }
         // TODO: Handle stale token
@@ -971,17 +992,23 @@ function viewItems(path, query, hash, then) {
             return;
         }
         if (403 === r.status) {
-            updateElement(application, createAlert(r.description, 'error'));
-            updateTitle('Application · Forbidden', false, applicationMain);
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Forbidden');
             return;
         }
         if (404 === r.status) {
-            updateElement(application, createAlert(r.description, 'error'));
-            updateTitle('Application · Not Found', false, applicationMain);
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Not Found');
             return;
         }
         let parent = r.data.parent;
-        updateTitle('Application · Folder', false, applicationMain);
+        updateBusyState(false, applicationMain);
         updateElement(applicationAside, 'TODO');
         updateElement(applicationMain, [
             createElement('h3', [
@@ -990,6 +1017,7 @@ function viewItems(path, query, hash, then) {
             ]),
             listItems
         ]);
+        updateTitle('Application · Folder');
         if (r.data.has.next || r.data.has.prev) {
             listItems.after(createElement('nav', [
                 createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
@@ -1018,23 +1046,23 @@ function viewItems(path, query, hash, then) {
                     chunk: pageChunkDefault,
                     part: pagePartDefault
                 }) : ""),
-                'title': '..' === v.name ? 'Go to parent' : (v.is.blob ? 'Open' : 'View')
+                'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
             });
             const listItemLinkDelete = createElement('a', '🗑️', {
                 'href': toPath(v.route) + toHash('delete'),
-                'title': 'Delete'
+                'title': 'Delete ' + v.route
             });
             const listItemLinkEdit = createElement('a', '📝', {
                 'href': toPath(v.route) + toHash('update'),
-                'title': 'Edit'
+                'title': 'Edit ' + v.route
             });
             const listItemLinkOpen = createElement('a', '🔍', {
                 'href': listItemLink.href,
-                'title': 'Open'
+                'title': 'Open ' + v.route
             });
             const listItemLinkView = createElement('a', '👁', {
                 'href': hub + '/blob' + v.route,
-                'title': 'View'
+                'title': 'View ' + v.route
             });
             const listItemLinks = createElement('span', v.is.folder ? listItemLinkOpen : listItemLinkView, {
                 'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
@@ -1059,8 +1087,7 @@ function viewItems(path, query, hash, then) {
                 e.preventDefault();
             } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
-                f3h(hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), 'DELETE').then(r => r.json()).then(r => {
-                    console.info('DELETE', hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), r);
+                loadJSON(hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), 'DELETE').then(r => {
                     if (200 === r.status) {
                         viewItems(path, query, hash, function () {
                             // application.prepend(createAlert(r.description, 'success'));
@@ -1103,7 +1130,7 @@ function viewItems(path, query, hash, then) {
                 if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
                     return; // Hidden from view
                 }
-                f3h(hub + '/%2B/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => r.json()).then(r => {
+                loadJSON(hub + '/%2B/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => {
                     if (200 === r.status) {
                         listItemSize.innerHTML = r.data.size;
                     }
@@ -1186,12 +1213,11 @@ formFileNew.addEventListener('submit', function (e) {
     let path = fromPath(window.location.pathname);
     let nameParts = this.elements.name.value.split('.'),
         nameX = nameParts.pop();
-    f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
+    loadJSON(hub + '/at' + path, 'PUT', {}, {
         content: "",
         name: nameParts.join('.'),
         x: nameX
-    })).then(r => r.json()).then(r => {
-        console.info('PUT', hub + '/at' + path, r);
+    }).then(r => {
         if (201 === r.status) {
             dialogFileNew.close();
             marks[r.data.route] = 1;
@@ -1219,11 +1245,11 @@ formFolderNew.addEventListener('submit', function (e) {
     let route = this.elements.name.value,
         routeName = toBase(route),
         routeParent = toParent(route);
-    f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
+    console.log({route,routeName,routeParent});
+    loadJSON(hub + '/at' + path, 'PUT', {}, {
         name: routeName,
         route: routeParent
-    })).then(r => r.json()).then(r => {
-        console.info('PUT', hub + '/at' + path, r);
+    }).then(r => {
         if (201 === r.status) {
             dialogFolderNew.close();
             route.split('/').map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
