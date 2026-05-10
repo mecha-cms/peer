@@ -2,7 +2,14 @@
 
 const application = document.querySelector('[role=application]');
 
-let folderSizeViews = {},
+const applicationAside = createElement('aside');
+const applicationFlex = createElement('div');
+const applicationFooter = createElement('footer');
+const applicationHeader = createElement('header');
+const applicationMain = createElement('main');
+
+let pageChunkDefault = 20,
+    pagePartDefault = 1,
     pageType = false;
 
 const formBlob = createElement('form', false, {
@@ -17,6 +24,7 @@ const formFile = createElement('form', [
     createElement('p', [
         createElement('input', false, {
             'name': 'name',
+            'pattern': '([#.@_~]?[A-Za-z\\d]+([_.\\-][A-Za-z\\d]+)*)?\\.\\w+',
             'placeholder': 'foo-bar.baz',
             'style': 'flex:1;',
             'type': 'text'
@@ -55,11 +63,13 @@ const formUser = createElement('form', [
     createElement('p', createElement('input', false, {
         'name': 'key',
         'placeholder': 'User',
+        'required': true,
         'type': 'text'
     })),
     createElement('p', createElement('input', false, {
         'name': 'pass',
         'placeholder': 'Pass',
+        'required': true,
         'type': 'password'
     })),
     createElement('p', createElement('button', '🔓 Enter', {
@@ -77,8 +87,7 @@ const formUser = createElement('form', [
 });
 
 formUser.addEventListener('submit', function (e) {
-    // Remove existing alert(s)
-    application.querySelectorAll('[role=alert]').forEach(v => v.remove());
+    clearAlerts();
     let key = this.elements.key.value,
         pass = this.elements.pass.value,
         peer = this.elements.peer.value;
@@ -88,17 +97,18 @@ formUser.addEventListener('submit', function (e) {
     }
     const info = createAlert('Logging in…', 'info');
     application.prepend(info);
-    updateTitle('Logging in…', true);
+    updateTitle('Logging in…', true, this);
     fetch(hub + '/enter', {
         body: JSON.stringify({ key, pass, peer }),
         headers: { 'content-type': 'application/json' },
         method: 'POST'
     }).then(r => r.json()).then(r => {
         if (200 !== r.status) {
-            updateAlert(info, r.description, 'error', 1000);
-            updateTitle('Application · Error');
-            this.elements.pass.value = "";
+            updateAlert(info, r.description, 'error');
+            updateTitle('Application · Error', false, this);
+            this.reset();
             if (404 === r.status) {
+                this.elements.key.value = key;
                 this.elements.key.focus();
                 this.elements.key.select();
             } else {
@@ -106,20 +116,33 @@ formUser.addEventListener('submit', function (e) {
             }
             return;
         }
+        this.reset();
         // For a more secure application, you may need to store the hub token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
         localStorage.setItem('user', r.user);
-        updateRoute('/lot/asset?chunk=20&part=1'), view(function () {
-            application.prepend(createAlert('Logged in.', 'success'));
-            formUser.elements.key.value = "";
-            formUser.elements.pass.value = "";
+        let hash = "",
+            path = '/lot/asset',
+            query = {
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            };
+        updateTitle(false, false, this); // Remove `aria-busy` in the form
+        onEnter(path, query, hash, function () {
+            viewItems(path, query, hash, function () {
+                application.prepend(createAlert('Logged in.', 'success'));
+            });
         });
+        updateRoute(path + '?' + (new URLSearchParams(query)), hash);
     }).catch(e => {
-        updateAlert(info, e + "", 'error', 1000);
+        updateAlert(info, e + "", 'error');
     });
     e.preventDefault();
 });
+
+function clearAlerts() {
+    document.querySelectorAll('[role=alert]').forEach(v => v.remove());
+}
 
 function createAlert(text, type, timeOut) {
     const element = createElement('p', text, {
@@ -173,9 +196,9 @@ function updateElement(element, content, attributes) {
     return element;
 }
 
-function updateTitle(text, busy) {
-    document.title = text;
-    updateElement(document.documentElement, false, {
+function updateTitle(text, busy, node) {
+    text && (document.title = text);
+    updateElement(node || document.documentElement, false, {
         'aria-busy': busy ? 'true' : false
     });
 }
@@ -258,7 +281,7 @@ function createTracesFromString(path) {
         } else {
             const a = createElement('a', v, {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
-                'href': sub + trace.slice(1) + '?chunk=20&part=1'
+                'href': sub + trace.slice(1) + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault
             });
             a.addEventListener('click', onClick);
             span.append('/', a);
@@ -346,13 +369,16 @@ function loadFolders() {
         return foldersPromise;
     }
     foldersPromise = f3h(hub + '/at/lot?limit=9999&x=0').then(r => r.json()).then(r => {
+        wasLoadFolders = true;
         return (folders = r);
     });
     return foldersPromise;
 }
 
-function onAfterView(path, query, hash, then) {
-    // Create button
+function onEnter(path, query, hash, then) {
+    updateElement(application, [applicationHeader, applicationFlex, applicationFooter]);
+    updateElement(applicationFlex, [applicationAside, applicationMain]);
+    // Create file/folder button
     const createFile = createElement('button', '📄 File');
     const createFolder = createElement('button', '📁 Folder');
     createFile.addEventListener('click', function (e) {
@@ -368,10 +394,10 @@ function onAfterView(path, query, hash, then) {
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('hub');
         localStorage.removeItem('user');
-        updateRoute('/enter'), view(onAfterViewFormUser);
+        updateRoute('/enter'), view(onExitAfter);
         e.preventDefault();
     });
-    // Folder navigation
+    // Folder navigation select-box
     const options = createElement('select', false, {
         'disabled': true
     });
@@ -402,7 +428,7 @@ function onAfterView(path, query, hash, then) {
                 icon = '🧩';
                 title = 'Extension';
             } else if ('y' === name) {
-                icon = '✨';
+                icon = '🎨';
                 title = 'Layout';
             }
             v.icon = icon;
@@ -433,30 +459,26 @@ function onAfterView(path, query, hash, then) {
         options.disabled = false;
     }).catch(console.error);
     options.addEventListener('change', function (e) {
-        updateRoute('/lot/' + this.value + '?chunk=20&part=1'), view();
+        updateRoute('/lot/' + this.value + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault), view();
         e.preventDefault();
     });
-    application.prepend(createElement('header', [options, createFile, createFolder, formSearch, exit], {
+    updateElement(applicationHeader, createElement('div', [options, createFile, createFolder, formSearch, exit], {
+        'role': 'group',
         'style': 'display:flex;gap:0.5rem;'
     }));
-    // Calculate folder size then view
-    for (let route in folderSizeViews) {
-        (() => {
-            let listItemSize = folderSizeViews[route];
-            if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
-                return; // Hidden from view
-            }
-            f3h(hub + '/%2B/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => r.json()).then(r => {
-                if (200 === r.status) {
-                    listItemSize.innerHTML = r.data.size;
-                }
-            }).catch(e => {});
-        })();
-    }
     then && then.call(application);
 }
 
-function onAfterViewFormUser(path, query, hash, then) {
+function onExit(path, query, hash, then) {
+    updateElement(application, null);
+    updateTitle('Application · Enter');
+    then && then.call(application);
+    // Force to load the folder(s) again on enter
+    folders = {};
+    wasLoadFolders = false;
+}
+
+function onExitAfter(path, query, hash, then) {
     if (!localStorage.getItem('hub')) {
         application.prepend(createAlert('Logged out.', 'success'));
     }
@@ -487,7 +509,7 @@ function openBlob(path, query, hash) {
         window.open(v, '_blank');
         setTimeout(() => URL.revokeObjectURL(v), 1000);
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error', 1000));
+        application.prepend(createAlert(e + "", 'error'));
     });
 }
 
@@ -500,63 +522,63 @@ function view(then) {
     if ('/enter' === path) {
         if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
-            viewFormUser(path, query, hash, then);
+            viewEnter(path, query, hash, then);
         } else {
-            viewFormUser(path, query, hash, then);
+            viewEnter(path, query, hash, then);
         }
     } else {
-        query.part ? viewItems(path, query, hash, then) : viewItem(path, query, hash, then);
+        onEnter(path, query, hash, function () {
+            query.part ? viewItems(path, query, hash, then) : ('#update' === hash ? viewItemTextEditor(path, query, hash, then) : viewItem(path, query, hash, then));
+        });
     }
 }
 
-function viewFormFile(path, query, hash, then) {
-    updateElement(application, formFile);
-    updateTitle('Application · File Editor');
-    formFile.elements.content.focus();
-    then && then.call(formFile);
-    return formFile;
-}
-
-function viewFormUser(path, query, hash, then) {
+function viewEnter(path, query, hash, then) {
+    clearAlerts();
     pageType = false;
-    updateElement(application, formUser);
-    updateTitle('Application · Enter');
-    formUser.elements.key.focus();
-    then && then.call(formUser);
-    return formUser;
+    onExit(path, query, hash, function () {
+        application.append(formUser);
+        then && then.call(application);
+        formUser.elements.key.focus();
+    });
 }
 
 function viewItem(path, query, hash, then) {
+    clearAlerts();
     pageType = 'file';
-    if ('#edit' === hash) {
-        return viewItemTextEditor(path, query, hash, then);
-    }
-    updateTitle('Loading…', true);
+    updateTitle('Loading…', true, applicationMain);
     const itemContent = createElement('code', 'Loading content…');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.log(r);
+        console.table([{'Request':'GET','Response':r}]);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onAfterViewFormUser);
+            updateRoute('/enter'), view(onExitAfter);
+            return;
+        }
+        if (403 === r.status) {
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateTitle('Application · Forbidden');
             return;
         }
         if (404 === r.status) {
-            updateElement(application, createAlert(r.description, 'error', 1000));
-            updateTitle('Application · Error');
-            onAfterView(path, query, hash, then);
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateTitle('Application · Not Found');
             return;
         }
-        updateElement(application, [
+        updateElement(applicationMain, [
             createElement('h3', [
                 '📄 ',
                 createTracesFromString('.' + path)
             ]),
             createElement('pre', itemContent)
         ]);
-        updateTitle('Application · File Viewer');
-        onAfterView(path, query, hash, then);
+        updateTitle('Application · File Viewer', false, applicationMain);
         if (r.data.is.text) {
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
@@ -578,56 +600,172 @@ function viewItem(path, query, hash, then) {
                     loadCodeMirror5().then(CodeMirror => {
                         CodeMirror.runMode(r.data.content, mode, itemContent);
                     }).catch(e => {
-                        application.prepend(createAlert(e + "", 'error', 1000));
+                        application.prepend(createAlert(e + "", 'error'));
                     });
                 }
             });
         } else {
+            if ('audio/' === r.data.type.slice(0, 6)) {
+                console.log('load audio player');
+            } else if ('image/' === r.data.type.slice(0, 6)) {
+                console.log('load image viewer');
+            } else if ('video/' === r.data.type.slice(0, 6)) {
+                console.log('load video player');
+            }
             itemContent.textContent = JSON.stringify(r, null, 2);
         }
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error', 1000));
+        application.prepend(createAlert(e + "", 'error'));
         then && then.call(application);
     });
 }
 
 function viewItemTextEditor(path, query, hash, then) {
+    clearAlerts();
     pageType = 'file';
-    updateTitle('Loading…', true);
+    updateTitle('Loading…', true, applicationAside);
+    const listItems = createElement('ul');
+    f3h(hub + '/at' + path.slice(0, path.lastIndexOf('/')) + '?limit=9999&x=1').then(r => r.json()).then(r => {
+        console.table([{'Request':'GET','Response':r}]);
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            return;
+        }
+        if (403 === r.status) {
+            return;
+        }
+        if (404 === r.status) {
+            return;
+        }
+        updateTitle(false, false, applicationAside); // Remove `aria-busy` in the form
+        updateElement(applicationAside, [listItems]);
+        let folderSizeViews = {};
+        r.data.children.forEach(v => {
+            const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+                'aria-current': path === v.route ? 'page' : false,
+                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault : '#update'),
+                'title': v.is.blob ? 'Open' : 'Edit'
+            });
+            const listItemSize = createElement('span', v.size ?? '…', {
+                'role': 'status'
+            });
+            if (v.is.folder) {
+                folderSizeViews[v.route] = listItemSize;
+            }
+            listItemLink.addEventListener('click', v.is.blob ? function (e) {
+                openBlob(this.href);
+                e.preventDefault();
+            } : function (e) {
+                listItems.querySelectorAll('li>a').forEach(v => updateElement(v, false, {
+                    'aria-current': false
+                }));
+                updateElement(this, false, {
+                    'aria-current': 'page'
+                });
+                updateTitle('Loading…', true, applicationMain);
+                let fileRoute = this.getAttribute('href').slice(sub.length, -7),
+                    fileName = decodeURIComponent(fileRoute.split('/').pop());
+                f3h(hub + '/%2B/content' + fileRoute).then(r => r.json()).then(r => {
+                    // TODO: Handle stale token
+                    if (401 === r.status) {
+                        localStorage.removeItem('hub');
+                        localStorage.removeItem('user');
+                        updateRoute('/enter'), view(onExitAfter);
+                        return;
+                    }
+                    if (200 === r.status) {
+                        updateElement(applicationMain.querySelector('h3'), [
+                            '📄 ',
+                            createTracesFromString('.' + fileRoute)
+                        ]);
+                        updateTitle('Application · File Editor', false, applicationMain);
+                        let mode = r.data.type,
+                            x = fileName.split('.').pop();
+                        if ('less' === x) {
+                            mode = 'text/x-less';
+                        } else if ('scss' === x) {
+                            mode = 'text/x-scss';
+                        } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                            mode = {
+                                base: 'text/' + ('txt' === x ? 'plain' : 'markdown'),
+                                name: 'yaml-frontmatter'
+                            };
+                        }
+                        console.log(mode);
+                        if (formFile.$c) {
+                            formFile.$c.setOption('mode', mode);
+                            formFile.$c.setValue(r.data.content);
+                            formFile.$c.save();
+                            formFile.$c.refresh();
+                            formFile.$c.focus();
+                        } else {
+                            formFile.elements.content.value = r.data.content;
+                            formFile.elements.content.focus();
+                        }
+                        formFile.elements.name.value = fileName;
+                    } else {
+                        updateTitle(false, false, applicationMain); // Remove `aria-busy`
+                        updateAlert(info, r.description, 'error');
+                    }
+                }).catch(e => {
+                    application.prepend(createAlert(e + "", 'error'));
+                });
+                e.preventDefault();
+            });
+            listItems.append(createElement('li', [
+                v.is.file ? '📄' : '📁',
+                listItemLink,
+                listItemSize
+            ], {
+                'data-name': v.name || "",
+                'data-x': v.x || ""
+            }));
+        });
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+    });
+    updateTitle('Loading…', true, applicationMain);
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.log(r);
+        console.table([{'Request':'GET','Response':r}]);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onAfterViewFormUser);
+            updateRoute('/enter'), view(onExitAfter);
+            return;
+        }
+        if (403 === r.status) {
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateTitle('Application · Forbidden');
             return;
         }
         if (404 === r.status) {
-            updateElement(application, createAlert(r.description, 'error', 1000));
-            updateTitle('Application · Error');
-            onAfterView(path, query, hash, then);
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.description, 'error'));
+            });
+            updateTitle('Application · Not Found');
             return;
         }
-        const form = viewFormFile(path, query, hash);
-        if (form.$content) {
-            form.$content.toTextArea(); // Destroy!
+        if (formFile.$c) {
+            formFile.$c.toTextArea(); // Destroy!
+            delete formFile.$c;
         }
-        form.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
-        form.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
-        updateElement(application, [
+        formFile.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
+        formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
+        updateElement(applicationMain, [
             createElement('h3', [
                 '📄 ',
                 createTracesFromString('.' + path)
             ]),
-            form
+            formFile
         ]);
-        updateTitle('Application · File Editor');
-        onAfterView(path, query, hash, then);
+        updateTitle('Application · File Editor', false, applicationMain);
         if (r.data.is.text) {
             let info = createAlert('Loading CodeMirror library…', 'info');
             application.prepend(info);
-            form.elements.content.style.display = 'none';
+            formFile.elements.content.style.display = 'none';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
                     let mode = r.data.type,
@@ -643,9 +781,9 @@ function viewItemTextEditor(path, query, hash, then) {
                         };
                     }
                     console.log(mode);
-                    form.elements.content.value = r.data.content;
+                    formFile.elements.content.value = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
-                        form.$content = CodeMirror.fromTextArea(form.elements.content, {
+                        formFile.$c = CodeMirror.fromTextArea(formFile.elements.content, {
                             autoCloseBrackets: true,
                             autofocus: true,
                             lineNumbers: true,
@@ -654,47 +792,66 @@ function viewItemTextEditor(path, query, hash, then) {
                             scrollbarStyle: 'simple',
                             viewportMargin: Infinity
                         });
-                        form && form.addEventListener('submit', () => form.$content.save());
-                        form.$content.refresh();
+                        formFile.addEventListener('submit', () => formFile.$c.save());
+                        // If content is longer than the maximum height or width, move cursor to the start of the editor
+                        formFile.$c.on('focus', function () {
+                            let pane = formFile.$c.getScrollerElement(),
+                                maxRows = formFile.$c.lineCount(),
+                                moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
+                            formFile.$c.setCursor(moveToStart ? 0 : maxRows, 0);
+                            if (moveToStart) {
+                                formFile.$c.scrollTo(0, 0);
+                            }
+                        });
+                        formFile.$c.refresh();
                         info.remove();
                     }).catch(e => {
-                        application.prepend(createAlert(e + "", 'error', 1000));
-                        form.elements.content.style.display = "";
-                        form.elements.content.focus();
+                        application.prepend(createAlert(e + "", 'error'));
+                        formFile.elements.content.style.display = "";
+                        formFile.elements.content.focus();
+                        info.remove();
                     });
                 } else {
-                    updateAlert(info, r.description, 'error', 1000);
+                    updateAlert(info, r.description, 'error');
                 }
+            }).catch(e => {
+                application.prepend(createAlert(e + "", 'error'));
             });
         } else {}
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error', 1000));
+        application.prepend(createAlert(e + "", 'error'));
         then && then.call(application);
     });
 }
 
 function viewItems(path, query, hash, then) {
+    clearAlerts();
     pageType = 'folder';
-    updateTitle('Loading…', true);
+    updateTitle('Loading…', true, applicationMain);
     const listItems = createElement('ul');
     f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
-        console.log(r);
+        console.table([{'Request':'GET','Response':r}]);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onAfterViewFormUser);
+            updateRoute('/enter'), view(onExitAfter);
+            return;
+        }
+        if (403 === r.status) {
+            updateElement(application, createAlert(r.description, 'error'));
+            updateTitle('Application · Forbidden', false, applicationMain);
             return;
         }
         if (404 === r.status) {
-            updateElement(application, createAlert(r.description, 'error', 1000));
-            updateTitle('Application · Error');
-            onAfterView(path, query, hash, then);
+            updateElement(application, createAlert(r.description, 'error'));
+            updateTitle('Application · Not Found', false, applicationMain);
             return;
         }
         let parent = r.data.parent;
-        updateTitle('Application · Folder');
-        updateElement(application, [
+        updateTitle('Application · Folder', false, applicationMain);
+        updateElement(applicationAside, 'TODO');
+        updateElement(applicationMain, [
             createElement('h3', [
                 '📂 ',
                 createTracesFromString('.' + path)
@@ -702,7 +859,7 @@ function viewItems(path, query, hash, then) {
             listItems
         ]);
         if (r.data.has.next || r.data.has.prev) {
-            application.append(createElement('nav', [
+            listItems.after(createElement('nav', [
                 createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
                     if (current || disabled) {
                         this.addEventListener('click', e => e.preventDefault());
@@ -719,18 +876,18 @@ function viewItems(path, query, hash, then) {
             parent.name = '..';
             r.data.children.unshift(parent);
         }
-        folderSizeViews = {}; // Reset!
+        let folderSizeViews = {};
         r.data.children.forEach(v => {
             const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + query.chunk + '&part=1' : ""),
+                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault : ""),
                 'title': '..' === v.name ? 'Go to parent' : (v.is.blob ? 'Open' : 'View')
             });
             const listItemLinkDelete = createElement('a', '🗑️', {
-                'href': '#delete',
+                'href': sub + v.route + '#delete',
                 'title': 'Delete'
             });
             const listItemLinkEdit = createElement('a', '📝', {
-                'href': sub + v.route + '#edit',
+                'href': sub + v.route + '#update',
                 'title': 'Edit'
             });
             const listItemLinkOpen = createElement('a', '🔍', {
@@ -759,7 +916,16 @@ function viewItems(path, query, hash, then) {
                 e.preventDefault();
             } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
-                alert('Delete');
+                f3h(hub + '/at' + this.getAttribute('href').slice(sub.length, -7), 'DELETE').then(r => r.json()).then(r => {
+                    console.table([{'Request':'DELETE','Response':r}]);
+                    if (200 === r.status) {
+                        viewItems(path, query, hash, function () {
+                            application.prepend(createAlert(r.description, 'success'));
+                        });
+                    }
+                }).catch(e => {
+                    application.prepend(createAlert(e + "", 'error'));
+                });
                 e.preventDefault();
             });
             listItemLinkEdit.addEventListener('click', function (e) {
@@ -783,11 +949,28 @@ function viewItems(path, query, hash, then) {
                 listItemLink,
                 listItemSize,
                 listItemLinks
-            ]));
+            ], {
+                'data-name': v.name || "",
+                'data-x': v.x || ""
+            }));
         });
-        onAfterView(path, query, hash, then);
+        // Calculate folder size then view
+        for (let route in folderSizeViews) {
+            (() => {
+                let listItemSize = folderSizeViews[route];
+                if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
+                    return; // Hidden from view
+                }
+                f3h(hub + '/%2B/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => r.json()).then(r => {
+                    if (200 === r.status) {
+                        listItemSize.innerHTML = r.data.size;
+                    }
+                }).catch(e => {});
+            })();
+        }
+        then && then.call(application);
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error', 1000));
+        application.prepend(createAlert(e + "", 'error'));
         then && then.call(application);
     });
 }
@@ -809,7 +992,7 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
         createElement('input', false, {
             'autofocus': true,
             'name': 'name',
-            'pattern': '([#.@_~]?[a-z\\d]+([_.\\-][a-z\\d]+)*)?\\.\\w+',
+            'pattern': '([#.@_~]?[A-Za-z\\d]+([_.\\-][A-Za-z\\d]+)*)?\\.\\w+',
             'placeholder': 'foo-bar.baz',
             'required': true,
             'type': 'text'
@@ -833,7 +1016,7 @@ const dialogFolderNew = createElement('dialog', formFolderNew = createElement('f
         createElement('input', false, {
             'autofocus': true,
             'name': 'name',
-            'pattern': '([._]?[a-z\\d]+([._\\-][a-z\\d]+)*)([\\\\\\/][._]?[a-z\\d]+([._\\-][a-z\\d]+)*)*',
+            'pattern': '([._]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)([\\\\\\/][._]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)*',
             'placeholder': 'foo/bar/baz',
             'required': true,
             'type': 'text'
@@ -851,14 +1034,12 @@ const dialogFolderNew = createElement('dialog', formFolderNew = createElement('f
     'method': 'dialog'
 }));
 
-formFileNew.addEventListener('reset', function (e) {
-    dialogFileNew.close();
-    this.elements.name.value = "";
-    e.preventDefault();
+formFileNew.addEventListener('reset', function () {
+    clearAlerts(), dialogFileNew.close();
 });
 
 formFileNew.addEventListener('submit', function (e) {
-    dialogFileNew.close();
+    clearAlerts();
     let path = window.location.pathname.slice(sub.length);
     let nameParts = this.elements.name.value.split('.'),
         nameX = nameParts.pop();
@@ -867,20 +1048,33 @@ formFileNew.addEventListener('submit', function (e) {
         name: nameParts.join('.'),
         x: nameX
     })).then(r => r.json()).then(r => {
-        updateRoute(path + '/' + nameParts.join('.') + '.' + nameX + '#edit');
-        viewItemTextEditor(path + '/' + nameParts.join('.') + '.' + nameX, {}, '#edit');
+        if (201 === r.status) {
+            dialogFileNew.close();
+            viewItems(path, {
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }, "", function () {
+                console.table([{'Request':'PUT','Response':r}]);
+                application.prepend(createAlert(r.description, 'success'));
+                let newItem = applicationMain.querySelector('li[data-name="' + (r.data.name || "") + '"][data-x="' + (r.data.x || "") + '"]');
+                newItem && updateElement(newItem, false, {
+                    'aria-selected': 'true'
+                });
+            });
+            this.reset();
+        } else {
+            dialogFileNew.prepend(createAlert(r.description, 'error'));
+        }
     }).catch(console.error);
     e.preventDefault();
 });
 
-formFolderNew.addEventListener('reset', function (e) {
-    dialogFolderNew.close();
-    this.elements.name.value = "";
-    e.preventDefault();
+formFolderNew.addEventListener('reset', function () {
+    clearAlerts(), dialogFolderNew.close();
 });
 
 formFolderNew.addEventListener('submit', function (e) {
-    dialogFolderNew.close();
+    clearAlerts();
     let path = window.location.pathname.slice(sub.length);
     let routeParts = this.elements.name.value.split('/'),
         routeName = routeParts.pop(),
@@ -889,11 +1083,20 @@ formFolderNew.addEventListener('submit', function (e) {
         name: routeName,
         route: routeParent
     })).then(r => r.json()).then(r => {
-        updateRoute(path + '/' + routeParent + routeName + '?chunk=20&part=1');
-        viewItems(path + '/' + routeParent + routeName, {
-            chunk: 20,
-            part: 1
-        });
+        if (201 === r.status) {
+            dialogFolderNew.close();
+            updateRoute(path + '/' + routeParent + routeName + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault);
+            viewItems(path + '/' + routeParent + routeName, {
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }, "", function () {
+                console.table([{'Request':'PUT','Response':r}]);
+                application.prepend(createAlert(r.description, 'success'));
+            });
+            this.reset();
+        } else {
+            dialogFolderNew.prepend(createAlert(r.description, 'error'));
+        }
     }).catch(console.error);
     e.preventDefault();
 });

@@ -264,6 +264,48 @@ pre code {
   white-space: pre-wrap;
 }
 
+:where(aside, main):empty {
+  background: rgb(0 0 0 / 0.025);
+  cursor: wait;
+  min-height: 12em;
+}
+
+:where(aside, main) > ul {
+  display: block;
+  list-style: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+}
+
+:where(aside, main) > ul > li {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+}
+
+:where(aside, main) > ul > li > a:first-child {
+  margin-right: auto;
+}
+
+:where(aside, main) > ul > li:hover {
+  background: rgb(0 0 255 / 0.05);
+}
+
+:where(aside, main) > ul > li:focus-within {
+  background: rgb(0 0 255 / 0.10);
+}
+
+:where(aside, main) > ul > li:focus-within:hover {
+  background: rgb(0 0 255 / 0.15);
+}
+
+:where(aside, main) > ul > li[aria-selected] {
+  background: rgb(255 255 0 / 0.125);
+}
+
 :where(button, input, select, textarea) {
   appearance: none;
   background: #ffc;
@@ -281,7 +323,7 @@ pre code {
 }
 
 :where(button, select) {
-  background-color: #eee;
+  background-color: #ddd;
   cursor: pointer;
 }
 
@@ -290,7 +332,7 @@ pre code {
 }
 
 :where(button, select):active {
-  background-color: #ddd;
+  background-color: #ccc;
 }
 
 :where(select),
@@ -301,7 +343,7 @@ pre code {
   background-size: 1rem;
 }
 
-:where(input, textarea):invalid {
+:where(input, textarea):user-invalid {
   border-color: #f00;
   color: #f00;
 }
@@ -310,38 +352,6 @@ pre code {
   font-family: monospace;
   resize: vertical;
   width: 100%;
-}
-
-h3 + ul {
-  display: block;
-  list-style: none;
-  margin-left: 0;
-  margin-right: 0;
-  padding: 0;
-}
-
-h3 + ul > li {
-  display: flex;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0;
-  padding: 0.25rem 0.75rem;
-}
-
-h3 + ul > li > a:first-child {
-  margin-right: auto;
-}
-
-h3 + ul > li:hover {
-  background: rgb(0 0 255 / 0.05);
-}
-
-h3 + ul > li:focus-within {
-  background: rgb(0 0 255 / 0.10);
-}
-
-h3 + ul > li:focus-within:hover {
-  background: rgb(0 0 255 / 0.15);
 }
 
 [aria-current] {
@@ -362,10 +372,10 @@ h3 + ul > li:focus-within:hover {
 
 [aria-busy] {
   cursor: wait;
+  opacity: 0.5;
 }
 
-[aria-busy] [role='application'] > :not([role='alert']) {
-  opacity: 0.5;
+[aria-busy] > * {
   pointer-events: none;
 }
 
@@ -420,6 +430,27 @@ h3 + ul > li:focus-within:hover {
   display: none;
 }
 
+[role='application'] > footer:empty,
+[role='application'] > header:empty {
+  display: none;
+}
+
+[role='application'] > header + div {
+  display: flex;
+  gap: 1rem;
+}
+
+[role='application'] > header + div > aside {
+  margin-top: 0;
+  min-width: 12rem;
+}
+
+[role='application'] > header + div > main {
+  flex: 1;
+  margin-top: 0;
+  min-width: 0;
+}
+
 [role='application']:has(> form > p > [name='pass']) {
   display: inline-block;
 }
@@ -445,8 +476,6 @@ form .CodeMirror {
   font-size: 80%;
   height: auto;
   line-height: 1.1;
-  max-height: 60em;
-  min-height: 1em;
 }
 
 form .CodeMirror-code {
@@ -454,7 +483,7 @@ form .CodeMirror-code {
 }
 
 form .CodeMirror-scroll {
-  max-height: 36em;
+  max-height: 50em;
   min-height: 1em;
 }
 
