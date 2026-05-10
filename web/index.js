@@ -528,7 +528,7 @@ function view(then) {
         }
     } else {
         onEnter(path, query, hash, function () {
-            query.part ? viewItems(path, query, hash, then) : ('#update' === hash ? viewItemTextEditor(path, query, hash, then) : viewItem(path, query, hash, then));
+            query.part ? viewItems(path, query, hash, then) : ('#update' === hash ? viewItemFileEditorText(path, query, hash, then) : viewItem(path, query, hash, then));
         });
     }
 }
@@ -620,7 +620,11 @@ function viewItem(path, query, hash, then) {
     });
 }
 
-function viewItemTextEditor(path, query, hash, then) {
+function viewItemFolderEditor(path, query, hash, then) {
+    // TODO
+}
+
+function viewItemFileEditorText(path, query, hash, then) {
     clearAlerts();
     pageType = 'file';
     updateTitle('Loading…', true, applicationAside);
@@ -756,7 +760,7 @@ function viewItemTextEditor(path, query, hash, then) {
         formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateElement(applicationMain, [
             createElement('h3', [
-                '📄 ',
+                (r.data.is.file ? '📄' : '📁') + ' ',
                 createTracesFromString('.' + path)
             ]),
             formFile
@@ -935,7 +939,7 @@ function viewItems(path, query, hash, then) {
             });
             listItemLinkEdit.addEventListener('click', function (e) {
                 let route = this.getAttribute('href').slice(sub.length);
-                updateRoute(route), viewItemTextEditor(route.split('#')[0]);
+                updateRoute(route), viewItemFileEditorText(route.split('#')[0]);
                 e.preventDefault();
             });
             listItemLinkOpen.addEventListener('click', function (e) {

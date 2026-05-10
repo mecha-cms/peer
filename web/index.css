@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
+
 *,
 ::after,
 ::before {
@@ -16,7 +18,7 @@
 :root {
   background: #ccc;
   color: #000;
-  font: 400 normal 16px/1.5 serif;
+  font: 400 normal 16px/1.5 serif, 'Noto Color Emoji';
   margin: 0;
   padding: 2rem;
 }
