@@ -8,6 +8,8 @@ const applicationFooter = createElement('footer');
 const applicationHeader = createElement('header');
 const applicationMain = createElement('main');
 
+const marks = JSON.parse(localStorage.getItem('marks') || '{}');
+
 let pageChunkDefault = 20,
     pagePartDefault = 1,
     pageType = false;
@@ -118,6 +120,7 @@ formUser.addEventListener('submit', function (e) {
             }
             return;
         }
+        console.info('POST', hub + '/enter', r);
         // For a more secure application, you may need to store the hub token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
@@ -426,6 +429,10 @@ function loadFolders() {
     return foldersPromise;
 }
 
+function onBeforeUnload() {
+    localStorage.setItem('marks', JSON.stringify(marks));
+}
+
 function onEnter(path, query, hash, then) {
     updateElement(application, [applicationHeader, applicationFlex, applicationFooter]);
     updateElement(applicationFlex, [applicationAside, applicationMain]);
@@ -573,6 +580,7 @@ function view(then) {
     const hash = fromHash(window.location.hash);
     const path = fromPath(window.location.pathname);
     const query = fromQuery(window.location.search);
+    delete marks[path];
     if ('/enter' === path) {
         if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
@@ -603,7 +611,7 @@ function viewItem(path, query, hash, then) {
     updateTitle('Loading…', true, applicationMain);
     const itemContent = createElement('code', 'Loading content…');
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.table([{'Request':'GET','Response':r}]);
+        console.info('GET', hub + '/at' + path, r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -683,8 +691,14 @@ function viewItemFileEditorText(path, query, hash, then) {
     pageType = 'file';
     updateTitle('Loading…', true, applicationAside);
     const listItems = createElement('ul');
-    f3h(hub + '/at' + path.slice(0, path.lastIndexOf('/')) + '?limit=9999&x=1').then(r => r.json()).then(r => {
-        console.table([{'Request':'GET','Response':r}]);
+    f3h(hub + '/at' + path.slice(0, path.lastIndexOf('/')) + toQuery({
+        limit: 9999,
+        x: 1
+    })).then(r => r.json()).then(r => {
+        console.info('GET', hub + '/at' + path.slice(0, path.lastIndexOf('/')) + toQuery({
+            limit: 9999,
+            x: 1
+        }), r);
         // TODO: Handle stale token
         if (401 === r.status) {
             return;
@@ -777,8 +791,7 @@ function viewItemFileEditorText(path, query, hash, then) {
                 listItemLink,
                 listItemSize
             ], {
-                'data-name': v.name || "",
-                'data-x': v.x || ""
+                'aria-selected': marks[v.route] ? 'true' : false
             }));
         });
     }).catch(e => {
@@ -786,7 +799,7 @@ function viewItemFileEditorText(path, query, hash, then) {
     });
     updateTitle('Loading…', true, applicationMain);
     f3h(hub + '/at' + path).then(r => r.json()).then(r => {
-        console.table([{'Request':'GET','Response':r}]);
+        console.info('GET', hub + '/at' + path, r);
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -892,8 +905,14 @@ function viewItems(path, query, hash, then) {
     pageType = 'folder';
     updateTitle('Loading…', true, applicationMain);
     const listItems = createElement('ul');
-    f3h(hub + '/at' + path + '?chunk=' + query.chunk + '&part=' + query.part).then(r => r.json()).then(r => {
-        console.table([{'Request':'GET','Response':r}]);
+    f3h(hub + '/at' + path + toQuery({
+        chunk: query.chunk,
+        part: query.part
+    })).then(r => r.json()).then(r => {
+        console.info('GET', hub + '/at' + path + toQuery({
+            chunk: query.chunk,
+            part: query.part
+        }), r);
         if (400 === r.status) {
             updateElement(application, createAlert(r.description, 'error'));
             updateTitle('Application · Error', false, applicationMain);
@@ -996,7 +1015,7 @@ function viewItems(path, query, hash, then) {
             } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
                 f3h(hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), 'DELETE').then(r => r.json()).then(r => {
-                    console.table([{'Request':'DELETE','Response':r}]);
+                    console.info('DELETE', hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), r);
                     if (200 === r.status) {
                         viewItems(path, query, hash, function () {
                             application.prepend(createAlert(r.description, 'success'));
@@ -1009,7 +1028,7 @@ function viewItems(path, query, hash, then) {
             });
             listItemLinkEdit.addEventListener('click', function (e) {
                 let route = fromPath(this.getAttribute('href'));
-                updateRoute(toPath(route)), viewItemFileEditorText(route.slice(0, -7));
+                updateRoute(toPath(route)), view();
                 e.preventDefault();
             });
             listItemLinkOpen.addEventListener('click', function (e) {
@@ -1029,8 +1048,7 @@ function viewItems(path, query, hash, then) {
                 listItemSize,
                 listItemLinks
             ], {
-                'data-name': v.name || "",
-                'data-x': v.x || ""
+                'aria-selected': marks[v.route] ? 'true' : false
             }));
         });
         // Calculate folder size then view
@@ -1059,6 +1077,7 @@ if ('/' !== fromPath(window.location.pathname) || "" !== window.location.search)
 }
 
 window.addEventListener('hashchange', onHashChange);
+window.addEventListener('beforeunload', onBeforeUnload);
 window.addEventListener('popstate', onPopState);
 
 view();
@@ -1129,16 +1148,13 @@ formFileNew.addEventListener('submit', function (e) {
     })).then(r => r.json()).then(r => {
         if (201 === r.status) {
             dialogFileNew.close();
+            marks[r.data.route] = 1;
             viewItems(path, {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }, "", function () {
-                console.table([{'Request':'PUT','Response':r}]);
                 application.prepend(createAlert(r.description, 'success'));
-                let newItem = applicationMain.querySelector('li[data-name="' + (r.data.name || "") + '"][data-x="' + (r.data.x || "") + '"]');
-                newItem && updateElement(newItem, false, {
-                    'aria-selected': 'true'
-                });
+                console.info('PUT', hub + '/at' + path, r);
             });
             this.reset();
         } else {
@@ -1164,6 +1180,9 @@ formFolderNew.addEventListener('submit', function (e) {
     })).then(r => r.json()).then(r => {
         if (201 === r.status) {
             dialogFolderNew.close();
+            routeParts.concat(routeName).map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
+                marks[path + '/' + s] = 1;
+            });
             updateRoute(toPath(path + '/' + routeParent + routeName) + toQuery({
                 chunk: pageChunkDefault,
                 part: pagePartDefault
@@ -1172,8 +1191,8 @@ formFolderNew.addEventListener('submit', function (e) {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }, "", function () {
-                console.table([{'Request':'PUT','Response':r}]);
                 application.prepend(createAlert(r.description, 'success'));
+                console.info('PUT', hub + '/at' + path, r);
             });
             this.reset();
         } else {

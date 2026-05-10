@@ -291,10 +291,13 @@ pre code {
   list-style: none;
   margin: 0;
   padding: 0.25rem 0.75rem;
+  white-space: nowrap;
 }
 
 :where(aside, main) > ul > li > a:first-child {
   margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 :where(aside, main) > ul > li:hover {
