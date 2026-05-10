@@ -10,8 +10,9 @@ $sub = '/peer/web';
     <meta charset="utf-8">
     <title>Loading…</title>
     <link href="<?= $sub; ?>/index.css" rel="stylesheet">
+    <link href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA1BMVEW15h0PzTmSAAAAC0lEQVQI12MgEQAAADAAAWV61nwAAAAASUVORK5CYII=" rel="icon">
   </head>
-  <body>
+  <body spellcheck="false">
     <div role="application"></div>
     <script>
       const hub = '<?= $hub; ?>';
