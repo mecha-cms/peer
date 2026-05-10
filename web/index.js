@@ -88,7 +88,8 @@ const formUser = createElement('form', [
 
 formUser.addEventListener('submit', function (e) {
     clearAlerts();
-    let key = this.elements.key.value,
+    let key,
+        k = key = this.elements.key.value,
         pass = this.elements.pass.value,
         peer = this.elements.peer.value;
     // Force `@` prefix
@@ -103,12 +104,13 @@ formUser.addEventListener('submit', function (e) {
         headers: { 'content-type': 'application/json' },
         method: 'POST'
     }).then(r => r.json()).then(r => {
+        this.reset();
         if (200 !== r.status) {
             updateAlert(info, r.description, 'error');
             updateTitle('Application · Error', false, this);
             this.reset();
+            this.elements.key.value = k;
             if (404 === r.status) {
-                this.elements.key.value = key;
                 this.elements.key.focus();
                 this.elements.key.select();
             } else {
@@ -116,7 +118,6 @@ formUser.addEventListener('submit', function (e) {
             }
             return;
         }
-        this.reset();
         // For a more secure application, you may need to store the hub token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
         localStorage.setItem('hub', r.data.hub);
@@ -133,7 +134,7 @@ formUser.addEventListener('submit', function (e) {
                 application.prepend(createAlert('Logged in.', 'success'));
             });
         });
-        updateRoute(path + '?' + (new URLSearchParams(query)), hash);
+        updateRoute(toPath(path) + toQuery(query));
     }).catch(e => {
         updateAlert(info, e + "", 'error');
     });
@@ -161,6 +162,41 @@ function createElement(name, content, attributes) {
 
 function createText(content) {
     return document.createTextNode(content);
+}
+
+function fromHash(hash) {
+    return hash.slice(1);
+}
+
+function fromPath(path) {
+    return path.slice(sub.length);
+}
+
+function fromQuery(query) {
+    return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
+        v = 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
+        if ('[]' === k.slice(-2)) {
+            if (!a[k = k.slice(0, -2)]) {
+                a[k] = [];
+            }
+            a[k].push(v);
+        } else {
+            a[k] = v;
+        }
+        return a;
+    }, {});
+}
+
+function toHash(hash) {
+    return '#' + hash;
+}
+
+function toPath(path) {
+    return sub + path;
+}
+
+function toQuery(lot) {
+    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(x => [k + '[]', x]) : [[k, v]]));
 }
 
 function updateAlert(element, text, type, timeOut) {
@@ -204,9 +240,6 @@ function updateTitle(text, busy, node) {
 }
 
 function updateRoute(route) {
-    if ('/' === route[0]) {
-        route = sub + route;
-    }
     window.history.pushState({}, "", route);
 }
 
@@ -281,7 +314,10 @@ function createTracesFromString(path) {
         } else {
             const a = createElement('a', v, {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
-                'href': sub + trace.slice(1) + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault
+                'href': toPath(trace.slice(1)) + toQuery({
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                })
             });
             a.addEventListener('click', onClick);
             span.append('/', a);
@@ -331,6 +367,8 @@ function loadCodeMirror5() {
         return Promise.resolve(window.CodeMirror);
     }
     const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
+    const info = createAlert('Loading CodeMirror library…', 'info');
+    application.prepend(info);
     return Promise.all([
         loadCSS(base + '/codemirror.min.css'),
         loadJS(base + '/codemirror.min.js'),
@@ -355,8 +393,13 @@ function loadCodeMirror5() {
         loadJS(base + '/mode/yaml-frontmatter/yaml-frontmatter.min.js')
     ]).then(() => {
         wasLoadCodeMirror5 = true;
-        if (!window.CodeMirror) throw new Error('Error loading `CodeMirror` library!');
+        if (!window.CodeMirror) {
+            throw new Error('Error loading `CodeMirror` library!');
+        }
+        info.remove();
         return window.CodeMirror;
+    }).catch(e => {
+        updateAlert(info, e + "", 'error');
     });
 }
 
@@ -394,7 +437,7 @@ function onEnter(path, query, hash, then) {
     exit.addEventListener('click', function (e) {
         localStorage.removeItem('hub');
         localStorage.removeItem('user');
-        updateRoute('/enter'), view(onExitAfter);
+        updateRoute(toPath('/enter')), view(onExitAfter);
         e.preventDefault();
     });
     // Folder navigation select-box
@@ -459,7 +502,10 @@ function onEnter(path, query, hash, then) {
         options.disabled = false;
     }).catch(console.error);
     options.addEventListener('change', function (e) {
-        updateRoute('/lot/' + this.value + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault), view();
+        updateRoute(toPath('/lot/' + this.value) + toQuery({
+            chunk: pageChunkDefault,
+            part: pagePartDefault
+        })), view();
         e.preventDefault();
     });
     updateElement(applicationHeader, createElement('div', [options, createFile, createFolder, formSearch, exit], {
@@ -516,9 +562,9 @@ function openBlob(path, query, hash) {
 function view(then) {
     abortController.abort();
     abortController = new AbortController;
-    const hash = window.location.hash;
-    const path = window.location.pathname.slice(sub.length);
-    const query = Object.fromEntries(new URLSearchParams(window.location.search));
+    const hash = fromHash(window.location.hash);
+    const path = fromPath(window.location.pathname);
+    const query = fromQuery(window.location.search);
     if ('/enter' === path) {
         if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
@@ -528,7 +574,7 @@ function view(then) {
         }
     } else {
         onEnter(path, query, hash, function () {
-            query.part ? viewItems(path, query, hash, then) : ('#update' === hash ? viewItemFileEditorText(path, query, hash, then) : viewItem(path, query, hash, then));
+            query.part ? viewItems(path, query, hash, then) : ('update' === hash ? viewItemFileEditorText(path, query, hash, then) : viewItem(path, query, hash, then));
         });
     }
 }
@@ -554,7 +600,7 @@ function viewItem(path, query, hash, then) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onExitAfter);
+            updateRoute(toPath('/enter')), view(onExitAfter);
             return;
         }
         if (403 === r.status) {
@@ -647,7 +693,10 @@ function viewItemFileEditorText(path, query, hash, then) {
         r.data.children.forEach(v => {
             const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
                 'aria-current': path === v.route ? 'page' : false,
-                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault : '#update'),
+                'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                }) : toHash('update')),
                 'title': v.is.blob ? 'Open' : 'Edit'
             });
             const listItemSize = createElement('span', v.size ?? '…', {
@@ -667,14 +716,14 @@ function viewItemFileEditorText(path, query, hash, then) {
                     'aria-current': 'page'
                 });
                 updateTitle('Loading…', true, applicationMain);
-                let fileRoute = this.getAttribute('href').slice(sub.length, -7),
+                let fileRoute = fromPath(this.getAttribute('href')).slice(0, -7),
                     fileName = decodeURIComponent(fileRoute.split('/').pop());
                 f3h(hub + '/%2B/content' + fileRoute).then(r => r.json()).then(r => {
                     // TODO: Handle stale token
                     if (401 === r.status) {
                         localStorage.removeItem('hub');
                         localStorage.removeItem('user');
-                        updateRoute('/enter'), view(onExitAfter);
+                        updateRoute(toPath('/enter')), view(onExitAfter);
                         return;
                     }
                     if (200 === r.status) {
@@ -709,7 +758,6 @@ function viewItemFileEditorText(path, query, hash, then) {
                         formFile.elements.name.value = fileName;
                     } else {
                         updateTitle(false, false, applicationMain); // Remove `aria-busy`
-                        updateAlert(info, r.description, 'error');
                     }
                 }).catch(e => {
                     application.prepend(createAlert(e + "", 'error'));
@@ -735,7 +783,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onExitAfter);
+            updateRoute(toPath('/enter')), view(onExitAfter);
             return;
         }
         if (403 === r.status) {
@@ -752,10 +800,11 @@ function viewItemFileEditorText(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        if (formFile.$c) {
-            formFile.$c.toTextArea(); // Destroy!
-            delete formFile.$c;
-        }
+        // if (formFile.$c) {
+        //     formFile.$c.toTextArea(); // Destroy!
+        //     delete formFile.$c;
+        // }
+        // Use the previous `CodeMirror` instance
         formFile.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
         formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateElement(applicationMain, [
@@ -767,8 +816,6 @@ function viewItemFileEditorText(path, query, hash, then) {
         ]);
         updateTitle('Application · File Editor', false, applicationMain);
         if (r.data.is.text) {
-            let info = createAlert('Loading CodeMirror library…', 'info');
-            application.prepend(info);
             formFile.elements.content.style.display = 'none';
             f3h(hub + '/%2B/content' + path).then(r => r.json()).then(r => {
                 if (200 === r.status) {
@@ -786,37 +833,41 @@ function viewItemFileEditorText(path, query, hash, then) {
                     }
                     console.log(mode);
                     formFile.elements.content.value = r.data.content;
-                    loadCodeMirror5().then(CodeMirror => {
-                        formFile.$c = CodeMirror.fromTextArea(formFile.elements.content, {
-                            autoCloseBrackets: true,
-                            autofocus: true,
-                            lineNumbers: true,
-                            lineWrapping: false,
-                            mode,
-                            scrollbarStyle: 'simple',
-                            viewportMargin: Infinity
-                        });
-                        formFile.addEventListener('submit', () => formFile.$c.save());
-                        // If content is longer than the maximum height or width, move cursor to the start of the editor
-                        formFile.$c.on('focus', function () {
-                            let pane = formFile.$c.getScrollerElement(),
-                                maxRows = formFile.$c.lineCount(),
-                                moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
-                            formFile.$c.setCursor(moveToStart ? 0 : maxRows, 0);
-                            if (moveToStart) {
-                                formFile.$c.scrollTo(0, 0);
-                            }
-                        });
+                    if (formFile.$c) {
+                        formFile.$c.setOption('mode', mode);
+                        formFile.$c.setValue(formFile.elements.content.value);
+                        formFile.$c.save();
                         formFile.$c.refresh();
-                        info.remove();
-                    }).catch(e => {
-                        application.prepend(createAlert(e + "", 'error'));
-                        formFile.elements.content.style.display = "";
-                        formFile.elements.content.focus();
-                        info.remove();
-                    });
-                } else {
-                    updateAlert(info, r.description, 'error');
+                        formFile.$c.focus();
+                    } else {
+                        loadCodeMirror5().then(CodeMirror => {
+                            formFile.$c = CodeMirror.fromTextArea(formFile.elements.content, {
+                                autoCloseBrackets: true,
+                                autofocus: true,
+                                lineNumbers: true,
+                                lineWrapping: false,
+                                mode,
+                                scrollbarStyle: 'simple',
+                                viewportMargin: Infinity
+                            });
+                            formFile.$c.refresh();
+                            formFile.addEventListener('submit', () => formFile.$c.save());
+                            // If content is longer than the maximum height or width, move cursor to the start of the editor
+                            formFile.$c.on('focus', function () {
+                                let pane = formFile.$c.getScrollerElement(),
+                                    maxRows = formFile.$c.lineCount(),
+                                    moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
+                                formFile.$c.setCursor(moveToStart ? 0 : maxRows, 0);
+                                if (moveToStart) {
+                                    formFile.$c.scrollTo(0, 0);
+                                }
+                            });
+                        }).catch(e => {
+                            application.prepend(createAlert(e + "", 'error'));
+                            formFile.elements.content.style.display = "";
+                            formFile.elements.content.focus();
+                        });
+                    }
                 }
             }).catch(e => {
                 application.prepend(createAlert(e + "", 'error'));
@@ -844,7 +895,7 @@ function viewItems(path, query, hash, then) {
         if (401 === r.status) {
             localStorage.removeItem('hub');
             localStorage.removeItem('user');
-            updateRoute('/enter'), view(onExitAfter);
+            updateRoute(toPath('/enter')), view(onExitAfter);
             return;
         }
         if (403 === r.status) {
@@ -875,7 +926,10 @@ function viewItems(path, query, hash, then) {
                     } else {
                         this.addEventListener('click', onClick);
                     }
-                    this.href = sub + r.data.route + '?chunk=' + r.query.chunk + '&part=' + part;
+                    this.href = toPath(r.data.route) + toQuery({
+                        chunk: r.query.chunk,
+                        part: part
+                    });
                 }, 'First', 'Previous', 'Next', 'Last')
             ], {
                 'aria-label': 'Pagination'
@@ -888,15 +942,18 @@ function viewItems(path, query, hash, then) {
         let folderSizeViews = {};
         r.data.children.forEach(v => {
             const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-                'href': v.is.blob ? hub + '/blob' + v.route : sub + v.route + (v.is.folder ? '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault : ""),
+                'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                }) : ""),
                 'title': '..' === v.name ? 'Go to parent' : (v.is.blob ? 'Open' : 'View')
             });
             const listItemLinkDelete = createElement('a', '🗑️', {
-                'href': sub + v.route + '#delete',
+                'href': toPath(v.route) + toHash('delete'),
                 'title': 'Delete'
             });
             const listItemLinkEdit = createElement('a', '📝', {
-                'href': sub + v.route + '#update',
+                'href': toPath(v.route) + toHash('update'),
                 'title': 'Edit'
             });
             const listItemLinkOpen = createElement('a', '🔍', {
@@ -925,7 +982,7 @@ function viewItems(path, query, hash, then) {
                 e.preventDefault();
             } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
-                f3h(hub + '/at' + this.getAttribute('href').slice(sub.length, -7), 'DELETE').then(r => r.json()).then(r => {
+                f3h(hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), 'DELETE').then(r => r.json()).then(r => {
                     console.table([{'Request':'DELETE','Response':r}]);
                     if (200 === r.status) {
                         viewItems(path, query, hash, function () {
@@ -938,8 +995,8 @@ function viewItems(path, query, hash, then) {
                 e.preventDefault();
             });
             listItemLinkEdit.addEventListener('click', function (e) {
-                let route = this.getAttribute('href').slice(sub.length);
-                updateRoute(route), viewItemFileEditorText(route.split('#')[0]);
+                let route = fromPath(this.getAttribute('href'));
+                updateRoute(toPath(route)), viewItemFileEditorText(route.slice(0, -7));
                 e.preventDefault();
             });
             listItemLinkOpen.addEventListener('click', function (e) {
@@ -984,8 +1041,8 @@ function viewItems(path, query, hash, then) {
     });
 }
 
-if ('/' !== window.location.pathname.slice(sub.length) || "" !== window.location.search) {} else {
-    updateRoute('/enter');
+if ('/' !== fromPath(window.location.pathname) || "" !== window.location.search) {} else {
+    updateRoute(toPath('/enter'));
 }
 
 window.addEventListener('hashchange', onHashChange);
@@ -1049,7 +1106,7 @@ formFileNew.addEventListener('reset', function () {
 
 formFileNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let path = window.location.pathname.slice(sub.length);
+    let path = fromPath(window.location.pathname);
     let nameParts = this.elements.name.value.split('.'),
         nameX = nameParts.pop();
     f3h(hub + '/at' + path, 'PUT', { 'content-type': 'application/json' }, JSON.stringify({
@@ -1084,7 +1141,7 @@ formFolderNew.addEventListener('reset', function () {
 
 formFolderNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let path = window.location.pathname.slice(sub.length);
+    let path = fromPath(window.location.pathname);
     let routeParts = this.elements.name.value.split('/'),
         routeName = routeParts.pop(),
         routeParent = routeParts.length ? routeParts.join('/') + '/' : "";
@@ -1094,7 +1151,10 @@ formFolderNew.addEventListener('submit', function (e) {
     })).then(r => r.json()).then(r => {
         if (201 === r.status) {
             dialogFolderNew.close();
-            updateRoute(path + '/' + routeParent + routeName + '?chunk=' + pageChunkDefault + '&part=' + pagePartDefault);
+            updateRoute(toPath(path + '/' + routeParent + routeName) + toQuery({
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }));
             viewItems(path + '/' + routeParent + routeName, {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
