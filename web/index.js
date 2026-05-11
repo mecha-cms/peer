@@ -8,7 +8,8 @@ const applicationFooter = createElement('footer');
 const applicationHeader = createElement('header');
 const applicationMain = createElement('main');
 
-const marks = JSON.parse(localStorage.getItem('marks') || '{}');
+let marks = JSON.parse(localStorage.getItem('marks') || '{}');
+let recents = JSON.parse(localStorage.getItem('recents') || '[]');
 
 let pageChunkDefault = 20,
     pagePartDefault = 1,
@@ -93,19 +94,25 @@ formFile.addEventListener('submit', function (e) {
     let content = 'content' in this.elements ? this.elements.content.value : false,
         name = this.elements.name.value,
         task = this.getAttribute('data-task') || 'update';
-    console.log({ content, name, task });
     if ('delete' === task) {
+        let pathToDelete = fromPath(this.action, hub + '/at');
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
-                let path = fromPath(toParent(this.action), hub + '/at'), query;
+                let path = toParent(pathToDelete), query;
                 updateRoute(toPath(path) + toQuery(query = {
                     chunk: pageChunkDefault,
                     part: pagePartDefault
                 }));
+                delete marks[pathToDelete];
+                let i = recents.findIndex(v => pathToDelete === v.route);
+                if (-1 !== i) {
+                    recents.splice(i, 1);
+                }
                 viewItems(path, query, "", function () {
                     application.prepend(createAlert(r.description, 'success'));
                 });
             }
+            console.log({action:this.action,path,pathToDelete});
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
         });
@@ -494,6 +501,7 @@ function loadFolders() {
 
 function onBeforeUnload() {
     localStorage.setItem('marks', JSON.stringify(marks));
+    localStorage.setItem('recents', JSON.stringify(recents));
 }
 
 function onEnter(path, query, hash, then) {
@@ -645,7 +653,6 @@ function view(then) {
     const hash = fromHash(window.location.hash);
     const path = fromPath(window.location.pathname);
     const query = fromQuery(window.location.search);
-    delete marks[path];
     if ('/enter' === path) {
         if (localStorage.getItem('hub')) {
             // TODO: Persistent enter state
@@ -672,6 +679,7 @@ function viewEnter(path, query, hash, then) {
 
 function viewItem(path, query, hash, then) {
     clearAlerts();
+    delete marks[path];
     pageType = 'file';
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
@@ -744,6 +752,14 @@ function viewItem(path, query, hash, then) {
             }
             itemContent.textContent = JSON.stringify(r, null, 2);
         }
+        let i = recents.findIndex(v => r.data.route === v.route);
+        if (-1 !== i) {
+            recents.splice(i, 1); // Remove duplicate
+        }
+        recents.unshift(r.data);
+        if (recents.length > pageChunkDefault) {
+            recents.pop();
+        }
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
         then && then.call(application);
@@ -751,11 +767,14 @@ function viewItem(path, query, hash, then) {
 }
 
 function viewItemFolderEditor(path, query, hash, then) {
+    clearAlerts();
+    delete marks[path];
     // TODO
 }
 
 function viewItemFileEditorText(path, query, hash, then) {
     clearAlerts();
+    delete marks[path];
     pageType = 'file';
     updateBusyState(true, applicationAside);
     updateTitle('Loading…');
@@ -786,12 +805,6 @@ function viewItemFileEditorText(path, query, hash, then) {
                 }) : toHash('update')),
                 'title': (v.is.blob ? 'Open' : 'Edit') + ' ' + v.route
             });
-            const listItemSize = createElement('span', v.size ?? '…', {
-                'role': 'status'
-            });
-            if (v.is.folder) {
-                folderSizeViews[v.route] = listItemSize;
-            }
             listItemLink.addEventListener('click', v.is.blob ? function (e) {
                 openBlob(this.href);
                 e.preventDefault();
@@ -806,7 +819,7 @@ function viewItemFileEditorText(path, query, hash, then) {
                 updateRoute(this.getAttribute('href'));
                 updateTitle('Loading…');
                 let fileRoute = fromPath(this.getAttribute('href')).slice(0, -7),
-                    fileName = decodeURIComponent(fileRoute.split('/').pop());
+                    fileName = decodeURIComponent(toBase(fileRoute));
                 loadJSON(hub + '/%2B/content' + fileRoute).then(r => {
                     // TODO: Handle stale token
                     if (401 === r.status) {
@@ -846,6 +859,22 @@ function viewItemFileEditorText(path, query, hash, then) {
                             formFile.elements.content.focus();
                         }
                         formFile.elements.name.value = fileName;
+                        r.data.is = {
+                            blob: false,
+                            file: true,
+                            folder: false
+                        }; // `is` data is not available in `/hub/+/content/*`
+                        r.data.name = fileName.replace(/\.([\w-]+)$/, ""); // `name` data is not available in `/hub/+/content/*`
+                        r.data.route = fileRoute; // `route` data is not available in `/hub/+/content/*`
+                        r.data.x = x; // `x` data is not available in `/hub/+/content/*`
+                        let i = recents.findIndex(v => r.data.route === v.route);
+                        if (-1 !== i) {
+                            recents.splice(i, 1); // Remove duplicate
+                        }
+                        recents.unshift(r.data);
+                        if (recents.length > pageChunkDefault) {
+                            recents.pop();
+                        }
                     } else {
                         updateBusyState(false, applicationMain);
                     }
@@ -856,8 +885,7 @@ function viewItemFileEditorText(path, query, hash, then) {
             });
             listItems.append(createElement('li', [
                 v.is.file ? '📄' : '📁',
-                listItemLink,
-                listItemSize
+                listItemLink
             ], {
                 'aria-selected': marks[v.route] ? 'true' : false
             }));
@@ -957,6 +985,22 @@ function viewItemFileEditorText(path, query, hash, then) {
                             formFile.elements.content.focus();
                         });
                     }
+                    r.data.is = {
+                        blob: false,
+                        file: true,
+                        folder: false
+                    }; // `is` data is not available in `/hub/+/content/*`
+                    r.data.name = toBase(path).replace(/\.([\w-]+)$/, ""); // `name` data is not available in `/hub/+/content/*`
+                    r.data.route = path; // `route` data is not available in `/hub/+/content/*`
+                    r.data.x = x; // `x` data is not available in `/hub/+/content/*`
+                    let i = recents.findIndex(v => r.data.route === v.route);
+                    if (-1 !== i) {
+                        recents.splice(i, 1); // Remove duplicate
+                    }
+                    recents.unshift(r.data);
+                    if (recents.length > pageChunkDefault) {
+                        recents.pop();
+                    }
                 }
             }).catch(e => {
                 application.prepend(createAlert(e + "", 'error'));
@@ -970,10 +1014,35 @@ function viewItemFileEditorText(path, query, hash, then) {
 
 function viewItems(path, query, hash, then) {
     clearAlerts();
+    delete marks[path];
     pageType = 'folder';
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     const listItems = createElement('ul');
+    const listItemsRecent = createElement('ul');
+    recents.forEach(v => {
+        const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+            'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }) : '#update'),
+            'title': (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
+        });
+        listItemLink.addEventListener('click', v.is.blob ? function (e) {
+            openBlob(this.href);
+            e.preventDefault();
+        } : function (e) {
+            let route = fromPath(this.getAttribute('href'));
+            updateRoute(toPath(route)), view();
+            e.preventDefault();
+        });
+        listItemsRecent.append(createElement('li', [
+            v.is.file ? '📄' : '📁',
+            listItemLink
+        ], {
+            'aria-selected': marks[v.route] ? 'true' : false
+        }));
+    });
     loadJSON(hub + '/at' + path + toQuery({
         chunk: query.chunk,
         part: query.part
@@ -1011,7 +1080,10 @@ function viewItems(path, query, hash, then) {
         }
         let parent = r.data.parent;
         updateBusyState(false, applicationMain);
-        updateElement(applicationAside, 'TODO');
+        updateElement(applicationAside, [
+            createElement('h5', 'Recents'),
+            listItemsRecent
+        ]);
         updateElement(applicationMain, [
             createElement('h3', [
                 '📂 ',
@@ -1020,6 +1092,14 @@ function viewItems(path, query, hash, then) {
             listItems
         ]);
         updateTitle('Application · Folder');
+        let i = recents.findIndex(v => r.data.route === v.route);
+        if (-1 !== i) {
+            recents.splice(i, 1); // Remove duplicate
+        }
+        recents.unshift(r.data);
+        if (recents.length > pageChunkDefault) {
+            recents.pop();
+        }
         if (r.data.has.next || r.data.has.prev) {
             listItems.after(createElement('nav', [
                 createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
@@ -1089,8 +1169,14 @@ function viewItems(path, query, hash, then) {
                 e.preventDefault();
             } : onClick);
             listItemLinkDelete.addEventListener('click', function (e) {
-                loadJSON(hub + '/at' + fromPath(this.getAttribute('href')).slice(0, -7), 'DELETE').then(r => {
+                let pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7);
+                loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
                     if (200 === r.status) {
+                        delete marks[pathToDelete];
+                        let i = recents.findIndex(v => pathToDelete === v.route);
+                        if (-1 !== i) {
+                            recents.splice(i, 1);
+                        }
                         viewItems(path, query, hash, function () {
                             // application.prepend(createAlert(r.description, 'success'));
                         });
@@ -1223,6 +1309,14 @@ formFileNew.addEventListener('submit', function (e) {
         if (201 === r.status) {
             dialogFileNew.close();
             marks[r.data.route] = 1;
+            let i = recents.findIndex(v => r.data.route === v.route);
+            if (-1 !== i) {
+                recents.splice(i, 1); // Remove duplicate
+            }
+            recents.unshift(r.data);
+            if (recents.length > pageChunkDefault) {
+                recents.pop();
+            }
             viewItems(path, {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
@@ -1249,7 +1343,6 @@ formFolderNew.addEventListener('submit', function (e) {
     let route = this.elements.name.value,
         routeName = toBase(route),
         routeParent = toParent(route);
-    console.log({route,routeName,routeParent});
     loadJSON(hub + '/at' + path, 'PUT', {}, {
         name: routeName,
         route: routeParent
