@@ -296,19 +296,19 @@ pre code {
   text-overflow: ellipsis;
 }
 
-:where(aside, main) > ul > li:hover {
+:where(aside, main) > ul > li:not([aria-disabled]):hover {
   background: rgb(0 0 255 / 0.05);
 }
 
-:where(aside, main) > ul > li:focus-within {
+:where(aside, main) > ul > li:not([aria-disabled]):focus-within {
   background: rgb(0 0 255 / 0.10);
 }
 
-:where(aside, main) > ul > li:focus-within:hover {
+:where(aside, main) > ul > li:not([aria-disabled]):focus-within:hover {
   background: rgb(0 0 255 / 0.15);
 }
 
-:where(aside, main) > ul > li[aria-selected] {
+:where(aside, main) > ul > li:not([aria-disabled])[aria-selected] {
   background: rgb(255 255 0 / 0.125);
 }
 
