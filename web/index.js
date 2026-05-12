@@ -482,7 +482,8 @@ function createList(items, path, query, hash) {
         });
         linkEdit.addEventListener('click', function (e) {
             let route = fromPath(this.getAttribute('href'));
-            updateRoute(toPath(route)), view();
+            updateRoute(toPath(route));
+            viewItem(route.split('#').shift(), {}, 'patch');
             e.preventDefault();
         });
         const linkOpen = createElement('a', '🔍', {
@@ -565,7 +566,8 @@ function createListOfActivity() {
             e.preventDefault();
         } : function (e) {
             let route = fromPath(this.getAttribute('href'));
-            updateRoute(toPath(route)), view();
+            updateRoute(toPath(route));
+            viewItem(route.split('#').shift(), {}, 'patch');
             e.preventDefault();
         });
         list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
@@ -1147,7 +1149,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateElement(applicationMain, [
             createElement('h3', [
-                (r.data.is.file ? '📄' : '📂') + ' ',
+                '📄 ',
                 createTraces('.' + path)
             ]),
             formFile
@@ -1283,7 +1285,7 @@ function viewItemFolderEditor(path, query, hash, then) {
         formFolder.elements.name.value = r.data.name;
         updateElement(applicationMain, [
             createElement('h3', [
-                '📂 ',
+                '📁 ',
                 createTraces('.' + path)
             ]),
             formFolder
