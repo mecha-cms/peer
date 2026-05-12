@@ -1,4 +1,19 @@
-// (() => {
+(() => {
+
+// Change with your RPC base URL
+const hub = 'http://127.0.0.1/test/hub';
+
+// This is an easy way to obtain relative base URL of the application conditionally. Simply put this `index.js` file in
+// the same folder as the `index.html` file. Then, in the `index.html` file, load this file relative to the root domain:
+//
+//     <script src="/index.js"></script>
+//
+// If you have this application in a sub-folder, load this `index.js` file relative to that sub-folder:
+//
+//     <script src="/path/to/index.js"></script>
+//
+// That’s it.
+const sub = toParent(document.currentScript.src).slice((window.location.protocol + '//' + window.location.hostname).length);
 
 const application = document.querySelector('[role=application]');
 
@@ -7,14 +22,6 @@ const applicationFlex = createElement('div');
 const applicationFooter = createElement('footer');
 const applicationHeader = createElement('header');
 const applicationMain = createElement('main');
-
-let activity = JSON.parse(localStorage.getItem('activity') || '[]');
-let cache = JSON.parse(localStorage.getItem('cache') || '{}');
-let mark = JSON.parse(localStorage.getItem('mark') || '{}');
-
-let pageChunkDefault = 20,
-    pagePartDefault = 1,
-    pageType = false;
 
 const formBlob = createElement('form', false, {
     'method': 'post'
@@ -49,6 +56,78 @@ const formFile = createElement('form', [
 ], {
     'method': 'post'
 });
+
+const formFolder = createElement('form', [
+    createElement('p', [
+        createElement('input', false, {
+            'name': 'name',
+            'pattern': '([#.@_~]?[A-Za-z\\d]+([_.\\-][A-Za-z\\d]+)*)?\\.\\w+',
+            'placeholder': 'foo-bar',
+            'style': 'flex:1;',
+            'type': 'text'
+        }),
+        createElement('button', 'Save', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'patch'
+        }),
+        createElement('button', 'Delete', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'delete'
+        })
+    ], {
+        'role': 'group'
+    })
+], {
+    'method': 'post'
+});
+
+const formSearch = createElement('form', createElement('input', false, {
+    'name': 'query',
+    'placeholder': 'Search…',
+    'style': 'width:100%;',
+}), {
+    'method': 'get',
+    'style': 'flex:1;'
+});
+
+const formUser = createElement('form', [
+    createElement('p', createElement('input', false, {
+        'name': 'key',
+        'placeholder': 'User',
+        'required': true,
+        'type': 'text'
+    })),
+    createElement('p', createElement('input', false, {
+        'name': 'pass',
+        'placeholder': 'Pass',
+        'required': true,
+        'type': 'password'
+    })),
+    createElement('p', createElement('button', '🔓 Enter', {
+        'type': 'submit'
+    }), {
+        'role': 'group'
+    }),
+    createElement('input', false, {
+        'name': 'peer',
+        'type': 'hidden',
+        'value': 'YOUR_APPLICATION_ID'
+    })
+], {
+    'method': 'post'
+});
+
+let abort = new AbortController,
+    activity = JSON.parse(localStorage.getItem('activity') || '[]'),
+    cache = JSON.parse(localStorage.getItem('cache') || '{}'),
+    mark = JSON.parse(localStorage.getItem('mark') || '{}'),
+    sizes = {};
+
+let pageChunkDefault = 20,
+    pagePartDefault = 1,
+    pageType = false;
 
 formFile.addEventListener('submit', function (e) {
     clearAlerts();
@@ -88,32 +167,6 @@ formFile.querySelectorAll('[type=submit]').forEach(v => {
     });
 });
 
-const formFolder = createElement('form', [
-    createElement('p', [
-        createElement('input', false, {
-            'name': 'name',
-            'pattern': '([#.@_~]?[A-Za-z\\d]+([_.\\-][A-Za-z\\d]+)*)?\\.\\w+',
-            'placeholder': 'foo-bar',
-            'style': 'flex:1;',
-            'type': 'text'
-        }),
-        createElement('button', 'Save', {
-            'name': 'task',
-            'type': 'submit',
-            'value': 'patch'
-        }),
-        createElement('button', 'Delete', {
-            'name': 'task',
-            'type': 'submit',
-            'value': 'delete'
-        })
-    ], {
-        'role': 'group'
-    })
-], {
-    'method': 'post'
-});
-
 formFolder.addEventListener('submit', function (e) {
     clearAlerts();
     let name = this.elements.name.value,
@@ -123,8 +176,8 @@ formFolder.addEventListener('submit', function (e) {
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
                 let path = toParent(pathToDelete), query;
-                deleteMark(pathToDelete);
                 deleteActivity(pathToDelete);
+                deleteMark(pathToDelete);
                 updateRoute(toPath(path) + toQuery(query = {
                     chunk: pageChunkDefault,
                     part: pagePartDefault
@@ -148,42 +201,6 @@ formFolder.querySelectorAll('[type=submit]').forEach(v => {
     v.addEventListener('click', function () {
         this.form.setAttribute('data-task', this.value);
     });
-});
-
-const formSearch = createElement('form', createElement('input', false, {
-    'name': 'query',
-    'placeholder': 'Search…',
-    'style': 'width:100%;',
-}), {
-    'method': 'post',
-    'style': 'flex:1;'
-});
-
-const formUser = createElement('form', [
-    createElement('p', createElement('input', false, {
-        'name': 'key',
-        'placeholder': 'User',
-        'required': true,
-        'type': 'text'
-    })),
-    createElement('p', createElement('input', false, {
-        'name': 'pass',
-        'placeholder': 'Pass',
-        'required': true,
-        'type': 'password'
-    })),
-    createElement('p', createElement('button', '🔓 Enter', {
-        'type': 'submit'
-    }), {
-        'role': 'group'
-    }),
-    createElement('input', false, {
-        'name': 'peer',
-        'type': 'hidden',
-        'value': 'YOUR_APPLICATION_ID'
-    })
-], {
-    'method': 'post'
 });
 
 formUser.addEventListener('submit', function (e) {
@@ -257,192 +274,6 @@ function createElement(name, content, attributes) {
     return updateElement(document.createElement(name), content, attributes);
 }
 
-function createText(content) {
-    return document.createTextNode(content);
-}
-
-function deleteActivity(route) {
-    for (let i = activity.length - 1; i >= 0; --i) {
-        if (route === activity[i].route) {
-            activity.splice(i, 1);
-        }
-    }
-}
-
-function deleteMark(route) {
-    delete mark[route];
-}
-
-function fromHash(hash) {
-    return hash.slice(1);
-}
-
-function fromPath(path, base) {
-    return path.slice((base || sub).length);
-}
-
-function fromQuery(query) {
-    return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
-        v = toValue(v);
-        if ('[]' === k.slice(-2)) {
-            if (!a[k = k.slice(0, -2)]) {
-                a[k] = [];
-            }
-            a[k].push(v);
-        } else {
-            a[k] = v;
-        }
-        return a;
-    }, {});
-}
-
-function fromValue(v) {
-    return false === v ? 'false' : (null === v ? 'null' : (true === v ? 'true' : ('number' === typeof v ? v + "" : v)));
-}
-
-function toBase(path) {
-    return path.split('/').pop();
-}
-
-function toValue(v) {
-    return 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
-}
-
-function toHash(hash) {
-    return '#' + hash;
-}
-
-function toParent(path) {
-    let last = path.lastIndexOf('/');
-    return -1 !== last ? path.slice(0, last) : "";
-}
-
-function toPath(path) {
-    return sub + path;
-}
-
-function toQuery(lot) {
-    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
-}
-
-function updateActivity(route, r) {
-    deleteActivity(route);
-    activity.unshift(r);
-    if (activity.length > pageChunkDefault - 1) {
-        activity.pop();
-    }
-}
-
-function updateMark(route) {
-    mark[route] = 1;
-}
-
-function updateAlert(element, text, type, timeOut) {
-    updateElement(element, text, {
-        'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
-        'role': 'alert'
-    });
-    if (timeOut) {
-        window.setTimeout(() => element.remove(), timeOut);
-    }
-    return element;
-}
-
-function updateBusyState(busy, node) {
-    updateElement(node || document.documentElement, false, {
-        'aria-busy': busy ? 'true' : false
-    })
-}
-
-function updateElement(element, content, attributes) {
-    if (attributes) {
-        for (const [name, value] of Object.entries(attributes)) {
-            if (false === value || null === value) {
-                element.removeAttribute(name);
-            } else {
-                element.setAttribute(name, true === value ? name : value + "");
-            }
-        }
-    }
-    if (null === content) {
-        element.replaceChildren();
-    } else if (content instanceof Node) {
-        element.replaceChildren(content);
-    } else if (content instanceof Array || content instanceof HTMLCollection || content instanceof NodeList) {
-        element.replaceChildren(...Array.from(content));
-    } else if ('string' === typeof content) {
-        element.innerHTML = content;
-    }
-    return element;
-}
-
-function updateTitle(text, busy) {
-    document.title = text;
-}
-
-function updateRoute(route) {
-    window.history.pushState({}, "", route);
-}
-
-function createPager(current, count, chunk, kin, then, first, previous, next, last) {
-    let start = 1,
-        end = Math.ceil(count / chunk),
-        root = document.createDocumentFragment(),
-        i, min, max;
-    if (end <= 1) {
-        return root;
-    }
-    if (current <= kin + kin) {
-        min = start;
-        max = Math.min(start + kin + kin, end);
-    } else if (current > end - kin - kin) {
-        min = end - kin - kin;
-        max = end;
-    } else {
-        min = current - kin;
-        max = current + kin;
-    }
-    function createDots() {
-        return createElement('span', '…', {
-            'role': 'none'
-        });
-    }
-    function createLink(page, title, rel, current, disabled) {
-        let element = createElement('a', title, {
-            'aria-current': current ? 'page' : false,
-            'aria-disabled': disabled ? 'true' : false,
-            'rel': rel || false
-        });
-        then && then.call(element, page, current, disabled);
-        return element;
-    }
-    if (previous) {
-        root.append(createLink(current === start ? start : current - 1, previous, 'prev', false, current === start));
-    }
-    if (first && last) {
-        if (min > start) {
-            root.append(createLink(start, start + "", 'prev', false, false));
-            if (min > start + 1) {
-                root.append(createDots());
-            }
-        }
-        for (i = min; i <= max; ++i) {
-            root.append(createLink(i, i + "", current >= i ? 'prev' : 'next', current === i, false));
-        }
-        if (max < end) {
-            if (max < end - 1) {
-                root.append(createDots());
-            }
-            root.append(createLink(end, end + "", 'next', false, false));
-        }
-    }
-    if (next) {
-        root.append(createLink(current === end ? end : current + 1, next, 'next', false, current === end));
-    }
-    return root;
-}
-
-const listSizes = {};
 function createList(items, path, query, hash) {
     const list = createElement('ul');
     items.forEach(v => {
@@ -517,25 +348,25 @@ function createList(items, path, query, hash) {
                 'aria-disabled': 'true'
             }));
         }
-        if (!listSizes[v.route]) {
-            listSizes[v.route] = createElement('span', v.size ?? '…', {
+        if (!sizes[v.route]) {
+            sizes[v.route] = createElement('span', v.size ?? '…', {
                 'role': 'status'
             });
-            ((size, sizeView, route) => {
+            ((size, node, route) => {
                 if (size) {
                     return;
                 }
-                loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => {
+                loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abort.signal }).then(r => {
                     if (200 === r.status) {
-                        sizeView.innerHTML = r.data.size;
+                        node.innerHTML = r.data.size;
                     }
                 }).catch(e => {});
-            })(v.size, listSizes[v.route], v.route);
+            })(v.size, sizes[v.route], v.route);
         }
         list.append(createElement('li', [
             v.is.file ? '📄' : '📁',
             link,
-            listSizes[v.route],
+            sizes[v.route],
             links
         ], {
             'aria-selected': mark[v.route] ? 'true' : false
@@ -669,6 +500,68 @@ function createListOfWork(items) {
     return list;
 }
 
+function createPager(current, count, chunk, kin, then, first, previous, next, last) {
+    let start = 1,
+        end = Math.ceil(count / chunk),
+        root = document.createDocumentFragment(),
+        i, min, max;
+    if (end <= 1) {
+        return root;
+    }
+    if (current <= kin + kin) {
+        min = start;
+        max = Math.min(start + kin + kin, end);
+    } else if (current > end - kin - kin) {
+        min = end - kin - kin;
+        max = end;
+    } else {
+        min = current - kin;
+        max = current + kin;
+    }
+    function createDots() {
+        return createElement('span', '…', {
+            'role': 'none'
+        });
+    }
+    function createLink(page, title, rel, current, disabled) {
+        let element = createElement('a', title, {
+            'aria-current': current ? 'page' : false,
+            'aria-disabled': disabled ? 'true' : false,
+            'rel': rel || false
+        });
+        then && then.call(element, page, current, disabled);
+        return element;
+    }
+    if (previous) {
+        root.append(createLink(current === start ? start : current - 1, previous, 'prev', false, current === start));
+    }
+    if (first && last) {
+        if (min > start) {
+            root.append(createLink(start, start + "", 'prev', false, false));
+            if (min > start + 1) {
+                root.append(createDots());
+            }
+        }
+        for (i = min; i <= max; ++i) {
+            root.append(createLink(i, i + "", current >= i ? 'prev' : 'next', current === i, false));
+        }
+        if (max < end) {
+            if (max < end - 1) {
+                root.append(createDots());
+            }
+            root.append(createLink(end, end + "", 'next', false, false));
+        }
+    }
+    if (next) {
+        root.append(createLink(current === end ? end : current + 1, next, 'next', false, current === end));
+    }
+    return root;
+}
+
+function createText(content) {
+    return document.createTextNode(content);
+}
+
 function createTraces(path) {
     const span = createElement('span');
     let trace = '/',
@@ -693,7 +586,44 @@ function createTraces(path) {
     return span;
 }
 
-let abortController = new AbortController;
+function deleteActivity(route) {
+    for (let i = activity.length - 1; i >= 0; --i) {
+        if (route === activity[i].route) {
+            activity.splice(i, 1);
+        }
+    }
+}
+
+function deleteMark(route) {
+    delete mark[route];
+}
+
+function fromHash(hash) {
+    return hash.slice(1);
+}
+
+function fromPath(path, base) {
+    return path.slice((base || sub).length);
+}
+
+function fromQuery(query) {
+    return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
+        v = toValue(v);
+        if ('[]' === k.slice(-2)) {
+            if (!a[k = k.slice(0, -2)]) {
+                a[k] = [];
+            }
+            a[k].push(v);
+        } else {
+            a[k] = v;
+        }
+        return a;
+    }, {});
+}
+
+function fromValue(v) {
+    return false === v ? 'false' : (null === v ? 'null' : (true === v ? 'true' : ('number' === typeof v ? v + "" : v)));
+}
 
 function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
     if ('string' !== typeof body) {
@@ -707,47 +637,8 @@ function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
     return fetch(path, Object.assign({ headers, method }, options, 'GET' === method || 'HEAD' === method ? {} : { body }));
 }
 
-function loadCSS(href) {
-    return new Promise((resolve, reject) => {
-        const l = createElement('link', false, {
-            'href': href,
-            'rel': 'stylesheet'
-        });
-        l.onerror = () => reject(new Error('Failed to load ' + href));
-        l.onload = resolve;
-        document.head.append(l);
-    });
-}
-
-function loadJS(src) {
-    return new Promise((resolve, reject) => {
-        const s = createElement('script', false, {
-            'src': src
-        });
-        s.async = false; // Force execution in order
-        s.onerror = () => reject(new Error('Failed to load ' + src));
-        s.onload = resolve;
-        document.head.append(s);
-    });
-}
-
-function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
-    return f3h(path, method, headers, body, options).then(r => r.json().then(r => {
-        console.groupCollapsed('🌐 ' + method + ' ' + path);
-        if ('GET' === method && -1 !== path.indexOf('?')) {
-            console.log('📤', fromQuery(path.split('?').pop()));
-        } else if (body) {
-            console.log('📤', body);
-        }
-        console.log('📥', r);
-        console.groupEnd();
-        return r;
-    }));
-}
-
-let wasLoadCodeMirror5;
 function loadCodeMirror5() {
-    if (wasLoadCodeMirror5) {
+    if (window.CodeMirror) {
         return Promise.resolve(window.CodeMirror);
     }
     const base = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16';
@@ -776,7 +667,6 @@ function loadCodeMirror5() {
         // Order #5
         loadJS(base + '/mode/yaml-frontmatter/yaml-frontmatter.min.js')
     ]).then(() => {
-        wasLoadCodeMirror5 = true;
         if (!window.CodeMirror) {
             throw new Error('Error loading `CodeMirror` library!');
         }
@@ -787,28 +677,70 @@ function loadCodeMirror5() {
     });
 }
 
-let folders = {}, foldersPromise, wasLoadFolders;
+function loadCSS(href) {
+    return new Promise((resolve, reject) => {
+        const l = createElement('link', false, {
+            'href': href,
+            'rel': 'stylesheet'
+        });
+        l.onerror = () => reject(new Error('Failed to load ' + href));
+        l.onload = resolve;
+        document.head.append(l);
+    });
+}
+
+let folders = [], foldersPromise;
 function loadFolders() {
-    if (wasLoadFolders) {
+    if (folders.length) {
         return Promise.resolve(folders);
     }
     if (foldersPromise) {
         return foldersPromise;
     }
-    (foldersPromise = loadJSON(hub + '/at/lot' + toQuery({
+    foldersPromise = loadJSON(hub + '/at/lot' + toQuery({
         limit: false,
         x: 0
-    }))).then(r => {
-        wasLoadFolders = true;
-        return (folders = r);
+    })).then(r => {
+        return (folders = r.data.children);
     });
     return foldersPromise;
+}
+
+function loadJS(src) {
+    return new Promise((resolve, reject) => {
+        const s = createElement('script', false, {
+            'src': src
+        });
+        s.async = false; // Force execution in order
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        s.onload = resolve;
+        document.head.append(s);
+    });
+}
+
+function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
+    return f3h(path, method, headers, body, options).then(r => r.json().then(r => {
+        console.groupCollapsed('🌐 ' + method + ' ' + path);
+        if ('GET' === method && -1 !== path.indexOf('?')) {
+            console.log('📤', fromQuery(path.split('?').pop()));
+        } else if (body) {
+            console.log('📤', body);
+        }
+        console.log('📥', r);
+        console.groupEnd();
+        return r;
+    }));
 }
 
 function onBeforeUnload() {
     localStorage.setItem('activity', JSON.stringify(activity));
     localStorage.setItem('cache', JSON.stringify(cache));
     localStorage.setItem('mark', JSON.stringify(mark));
+}
+
+function onClick(e) {
+    updateRoute(this.href), view();
+    e.preventDefault();
 }
 
 function onEnter(path, query, hash, then) {
@@ -841,51 +773,47 @@ function onEnter(path, query, hash, then) {
     const value = path.split('/')[2] || "";
     let selected;
     updateBusyState(true, options);
-    loadFolders().then(r => {
-        if (200 === r.status) {
-            r.data.children.map(v => {
-                let icon = '📁',
-                    name = v.name,
-                    title = name[0].toUpperCase() + name.slice(1);
-                if ('asset' === name) {
-                    icon = '🗂️';
-                } else if ('cache' === name) {
-                    icon = '⏰';
-                } else if ('comment' === name) {
-                    icon = '💬';
-                } else if ('image' === name) {
-                    icon = '🌄';
-                } else if ('page' === name) {
-                    icon = '📑';
-                } else if ('tag' === name) {
-                    icon = '🏷️';
-                } else if ('trash' === name) {
-                    icon = '♻️';
-                } else if ('user' === name) {
-                    icon = '👤';
-                } else if ('x' === name) {
-                    icon = '🧩';
-                    title = 'Extension';
-                } else if ('y' === name) {
-                    icon = '🎨';
-                    title = 'Layout';
-                }
-                v.icon = icon;
-                v.title = title;
-                return v;
-            }).sort((a, b) => a.title.localeCompare(b.title)).forEach(v => {
-                const option = createElement('option', v.icon + ' ' + v.title, {
-                    'selected': value === v.name ? "" : false,
-                    'value': v.name
-                });
-                if (!selected && value === v.name) {
-                    selected = option;
-                }
-                options.append(option);
+    loadFolders().then(items => {
+        items.map(v => {
+            let icon = '📁',
+                name = v.name,
+                title = name[0].toUpperCase() + name.slice(1);
+            if ('asset' === name) {
+                icon = '🗂️';
+            } else if ('cache' === name) {
+                icon = '⏰';
+            } else if ('comment' === name) {
+                icon = '💬';
+            } else if ('image' === name) {
+                icon = '🌄';
+            } else if ('page' === name) {
+                icon = '📑';
+            } else if ('tag' === name) {
+                icon = '🏷️';
+            } else if ('trash' === name) {
+                icon = '♻️';
+            } else if ('user' === name) {
+                icon = '👤';
+            } else if ('x' === name) {
+                icon = '🧩';
+                title = 'Extension';
+            } else if ('y' === name) {
+                icon = '🎨';
+                title = 'Layout';
+            }
+            v.icon = icon;
+            v.title = title;
+            return v;
+        }).sort((a, b) => a.title.localeCompare(b.title)).forEach(v => {
+            const option = createElement('option', v.icon + ' ' + v.title, {
+                'selected': value === v.name ? "" : false,
+                'value': v.name
             });
-        } else {
-            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-        }
+            if (!selected && value === v.name) {
+                selected = option;
+            }
+            options.append(option);
+        });
         if (!selected) {
             updateElement(options, [
                 createElement('option', '⛔ System', {
@@ -921,11 +849,11 @@ function onEnter(path, query, hash, then) {
 function onExit(path, query, hash, then) {
     activity = [];
     cache = {};
+    folders = [];
     localStorage.removeItem('activity');
     localStorage.removeItem('cache');
     localStorage.removeItem('mark');
     mark = {};
-    wasLoadFolders = false;
     updateElement(application, null);
     updateTitle('Application · Enter');
     then && then.call(application);
@@ -936,11 +864,6 @@ function onExitAfter(path, query, hash, then) {
         application.prepend(createAlert('Logged out.', 'success'));
     }
     then && then.call(application);
-}
-
-function onClick(e) {
-    updateRoute(this.href), view();
-    e.preventDefault();
 }
 
 function onHashChange() {
@@ -966,9 +889,91 @@ function openBlob(path, query, hash) {
     });
 }
 
+function toBase(path) {
+    return path.split('/').pop();
+}
+
+function toHash(hash) {
+    return '#' + hash;
+}
+
+function toParent(path) {
+    let last = path.lastIndexOf('/');
+    return -1 !== last ? path.slice(0, last) : "";
+}
+
+function toPath(path) {
+    return sub + path;
+}
+
+function toQuery(lot) {
+    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
+}
+
+function toValue(v) {
+    return 'false' === v ? false : ('null' === v ? null : ('true' === v ? true : ("" !== v && !Number.isNaN(Number(v)) ? +v : v)));
+}
+
+function updateActivity(route, r) {
+    deleteActivity(route);
+    activity.unshift(r);
+    if (activity.length > pageChunkDefault - 1) {
+        activity.pop();
+    }
+}
+
+function updateAlert(element, text, type, timeOut) {
+    updateElement(element, text, {
+        'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
+        'role': 'alert'
+    });
+    if (timeOut) {
+        window.setTimeout(() => element.remove(), timeOut);
+    }
+    return element;
+}
+
+function updateBusyState(busy, node) {
+    updateElement(node || document.documentElement, false, {
+        'aria-busy': busy ? 'true' : false
+    })
+}
+
+function updateElement(element, content, attributes) {
+    if (attributes) {
+        for (const [name, value] of Object.entries(attributes)) {
+            if (false === value || null === value) {
+                element.removeAttribute(name);
+            } else {
+                element.setAttribute(name, true === value ? name : value + "");
+            }
+        }
+    }
+    if (null === content) {
+        element.replaceChildren();
+    } else if (content instanceof Node) {
+        element.replaceChildren(content);
+    } else if (content instanceof Array || content instanceof HTMLCollection || content instanceof NodeList) {
+        element.replaceChildren(...Array.from(content));
+    } else if ('string' === typeof content) {
+        element.innerHTML = content;
+    }
+    return element;
+}
+
+function updateMark(route) {
+    mark[route] = 1;
+}
+
+function updateRoute(route) {
+    window.history.pushState({}, "", route);
+}
+
+function updateTitle(text, busy) {
+    document.title = text;
+}
+
 function view(then) {
-    abortController.abort();
-    abortController = new AbortController;
     const hash = fromHash(window.location.hash);
     const path = fromPath(window.location.pathname);
     const query = fromQuery(window.location.search);
@@ -987,6 +992,8 @@ function view(then) {
 }
 
 function viewEnter(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
     clearAlerts();
     pageType = false;
     onExit(path, query, hash, function () {
@@ -997,6 +1004,8 @@ function viewEnter(path, query, hash, then) {
 }
 
 function viewItem(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
     clearAlerts();
     deleteMark(path);
     pageType = 'file';
@@ -1091,6 +1100,8 @@ function viewItem(path, query, hash, then) {
 }
 
 function viewItemFileEditorText(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
     clearAlerts();
     deleteMark(path);
     pageType = 'file';
@@ -1229,6 +1240,8 @@ function viewItemFileEditorText(path, query, hash, then) {
 }
 
 function viewItemFolderEditor(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
     clearAlerts();
     deleteMark(path);
     pageType = 'folder';
@@ -1299,6 +1312,8 @@ function viewItemFolderEditor(path, query, hash, then) {
 }
 
 function viewItems(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
     clearAlerts();
     deleteMark(path);
     pageType = 'folder';
@@ -1514,4 +1529,4 @@ document.body.append(dialogFileNew, dialogFolderNew);
 
 view();
 
-// })();
+})();
