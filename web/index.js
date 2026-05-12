@@ -9,6 +9,7 @@ const applicationHeader = createElement('header');
 const applicationMain = createElement('main');
 
 let activity = JSON.parse(localStorage.getItem('activity') || '[]');
+let cache = JSON.parse(localStorage.getItem('cache') || '{}');
 let mark = JSON.parse(localStorage.getItem('mark') || '{}');
 
 let pageChunkDefault = 20,
@@ -49,8 +50,104 @@ const formFile = createElement('form', [
     'method': 'post'
 });
 
-const formFolder = createElement('form', false, {
+formFile.addEventListener('submit', function (e) {
+    clearAlerts();
+    let content = 'content' in this.elements ? this.elements.content.value : false,
+        name = this.elements.name.value,
+        task = this.getAttribute('data-task') || 'patch';
+    if ('delete' === task) {
+        let pathToDelete = fromPath(this.action, hub + '/at');
+        loadJSON(this.action, 'DELETE').then(r => {
+            if (200 === r.status) {
+                let path = toParent(pathToDelete), query;
+                deleteActivity(pathToDelete);
+                deleteMark(pathToDelete);
+                updateRoute(toPath(path) + toQuery(query = {
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                }));
+                viewItems(path, query, "", function () {
+                    application.prepend(createAlert(r.description, 'success'));
+                });
+            }
+        }).catch(e => {
+            application.prepend(createAlert(e + "", 'error'));
+        });
+    } else if ('patch' === task) {
+        this.$ && this.$.save(); // From `CodeMirror` instance
+        console.info('PATCH');
+    } else {
+        // Bad request!
+    }
+    e.preventDefault();
+});
+
+formFile.querySelectorAll('[type=submit]').forEach(v => {
+    v.addEventListener('click', function () {
+        this.form.setAttribute('data-task', this.value);
+    });
+});
+
+const formFolder = createElement('form', [
+    createElement('p', [
+        createElement('input', false, {
+            'name': 'name',
+            'pattern': '([#.@_~]?[A-Za-z\\d]+([_.\\-][A-Za-z\\d]+)*)?\\.\\w+',
+            'placeholder': 'foo-bar',
+            'style': 'flex:1;',
+            'type': 'text'
+        }),
+        createElement('button', 'Save', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'patch'
+        }),
+        createElement('button', 'Delete', {
+            'name': 'task',
+            'type': 'submit',
+            'value': 'delete'
+        })
+    ], {
+        'role': 'group'
+    })
+], {
     'method': 'post'
+});
+
+formFolder.addEventListener('submit', function (e) {
+    clearAlerts();
+    let name = this.elements.name.value,
+        task = this.getAttribute('data-task') || 'patch';
+    if ('delete' === task) {
+        let pathToDelete = fromPath(this.action, hub + '/at');
+        loadJSON(this.action, 'DELETE').then(r => {
+            if (200 === r.status) {
+                let path = toParent(pathToDelete), query;
+                deleteMark(pathToDelete);
+                deleteActivity(pathToDelete);
+                updateRoute(toPath(path) + toQuery(query = {
+                    chunk: pageChunkDefault,
+                    part: pagePartDefault
+                }));
+                viewItems(path, query, "", function () {
+                    application.prepend(createAlert(r.description, 'success'));
+                });
+            }
+        }).catch(e => {
+            application.prepend(createAlert(e + "", 'error'));
+        });
+    } else if ('patch' === task) {
+        console.info('PATCH');
+    } else {
+        // Bad request!
+    }
+    e.preventDefault();
+});
+
+formFolder.querySelectorAll('[type=submit]').forEach(v => {
+    v.addEventListener('click', function () {
+        this.form.setAttribute('data-task', this.value);
+    });
 });
 
 const formSearch = createElement('form', createElement('input', false, {
@@ -87,46 +184,6 @@ const formUser = createElement('form', [
     })
 ], {
     'method': 'post'
-});
-
-formFile.addEventListener('submit', function (e) {
-    clearAlerts();
-    let content = 'content' in this.elements ? this.elements.content.value : false,
-        name = this.elements.name.value,
-        task = this.getAttribute('data-task') || 'patch';
-    if ('delete' === task) {
-        let pathToDelete = fromPath(this.action, hub + '/at');
-        loadJSON(this.action, 'DELETE').then(r => {
-            if (200 === r.status) {
-                let path = toParent(pathToDelete), query;
-                updateRoute(toPath(path) + toQuery(query = {
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault
-                }));
-                delete mark[pathToDelete];
-                let i = activity.findIndex(v => pathToDelete === v.route);
-                if (-1 !== i) {
-                    activity.splice(i, 1);
-                }
-                viewItems(path, query, "", function () {
-                    application.prepend(createAlert(r.description, 'success'));
-                });
-            }
-        }).catch(e => {
-            application.prepend(createAlert(e + "", 'error'));
-        });
-    } else if ('patch' === task) {
-        console.info('PATCH');
-    } else {
-        // Bad request!
-    }
-    e.preventDefault();
-});
-
-formFile.querySelectorAll('[type=submit]').forEach(v => {
-    v.addEventListener('click', function () {
-        this.form.setAttribute('data-task', this.value);
-    });
 });
 
 formUser.addEventListener('submit', function (e) {
@@ -204,6 +261,18 @@ function createText(content) {
     return document.createTextNode(content);
 }
 
+function deleteActivity(route) {
+    for (let i = activity.length - 1; i >= 0; --i) {
+        if (route === activity[i].route) {
+            activity.splice(i, 1);
+        }
+    }
+}
+
+function deleteMark(route) {
+    delete mark[route];
+}
+
 function fromHash(hash) {
     return hash.slice(1);
 }
@@ -254,6 +323,18 @@ function toPath(path) {
 
 function toQuery(lot) {
     return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
+}
+
+function updateActivity(route, r) {
+    deleteActivity(route);
+    activity.unshift(r);
+    if (activity.length > pageChunkDefault - 1) {
+        activity.pop();
+    }
+}
+
+function updateMark(route) {
+    mark[route] = 1;
 }
 
 function updateAlert(element, text, type, timeOut) {
@@ -361,7 +442,232 @@ function createPager(current, count, chunk, kin, then, first, previous, next, la
     return root;
 }
 
-function createTracesFromString(path) {
+const listSizes = {};
+function createList(items, path, query, hash) {
+    const list = createElement('ul');
+    items.forEach(v => {
+        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+            'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }) : ""),
+            'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
+        });
+        link.addEventListener('click', v.is.blob ? function (e) {
+            openBlob(this.href);
+            e.preventDefault();
+        } : onClick);
+        const linkDelete = createElement('a', '🗑️', {
+            'href': toPath(v.route) + toHash('delete'),
+            'title': 'Delete ' + v.route
+        });
+        linkDelete.addEventListener('click', function (e) {
+            let pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7);
+            loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
+                if (200 === r.status) {
+                    deleteActivity(pathToDelete);
+                    deleteMark(pathToDelete);
+                    viewItems(path, query, hash, function () {
+                        // application.prepend(createAlert(r.description, 'success'));
+                    });
+                }
+            }).catch(e => {
+                application.prepend(createAlert(e + "", 'error'));
+            });
+            e.preventDefault();
+        });
+        const linkEdit = createElement('a', '📝', {
+            'href': toPath(v.route) + toHash('patch'),
+            'title': 'Edit ' + v.route
+        });
+        linkEdit.addEventListener('click', function (e) {
+            let route = fromPath(this.getAttribute('href'));
+            updateRoute(toPath(route)), view();
+            e.preventDefault();
+        });
+        const linkOpen = createElement('a', '🔍', {
+            'href': link.href,
+            'title': 'Open ' + v.route
+        });
+        linkOpen.addEventListener('click', function (e) {
+            link.click();
+            e.preventDefault();
+        });
+        const linkView = createElement('a', '👁', {
+            'href': hub + '/blob' + v.route,
+            'title': 'View ' + v.route
+        });
+        linkView.addEventListener('click', v.is.blob ? function (e) {
+            openBlob(this.href);
+            e.preventDefault();
+        } : function (e) {
+            link.click();
+            e.preventDefault();
+        });
+        const links = createElement('span', v.is.folder ? linkOpen : linkView, {
+            'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
+        });
+        if ('..' !== v.name) {
+            links.append(linkEdit, linkDelete);
+        } else {
+            links.append(createElement('span', linkEdit.textContent, {
+                'aria-disabled': 'true'
+            }), createElement('span', linkDelete.textContent, {
+                'aria-disabled': 'true'
+            }));
+        }
+        if (!listSizes[v.route]) {
+            listSizes[v.route] = createElement('span', v.size ?? '…', {
+                'role': 'status'
+            });
+            ((size, sizeView, route) => {
+                if (size) {
+                    return;
+                }
+                loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => {
+                    if (200 === r.status) {
+                        sizeView.innerHTML = r.data.size;
+                    }
+                }).catch(e => {});
+            })(v.size, listSizes[v.route], v.route);
+        }
+        list.append(createElement('li', [
+            v.is.file ? '📄' : '📁',
+            link,
+            listSizes[v.route],
+            links
+        ], {
+            'aria-selected': mark[v.route] ? 'true' : false
+        }));
+    });
+    return list;
+}
+
+function createListOfActivity() {
+    if (!activity.length) {
+        return createElement('p', 'None', {
+            'role': 'status'
+        });
+    }
+    const current = fromPath(window.location.pathname);
+    const list = createElement('ul');
+    activity.forEach(v => {
+        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+            'aria-current': current === v.route ? 'page' : false,
+            'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }) : toHash('patch')),
+            'title': (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
+        });
+        link.addEventListener('click', v.is.blob ? function (e) {
+            openBlob(this.href);
+            e.preventDefault();
+        } : function (e) {
+            let route = fromPath(this.getAttribute('href'));
+            updateRoute(toPath(route)), view();
+            e.preventDefault();
+        });
+        list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
+            'aria-selected': mark[v.route] ? 'true' : false
+        }));
+    });
+    return list;
+}
+
+function createListOfWork(items) {
+    if (!items.length) {
+        return createElement('p', 'None', {
+            'role': 'status'
+        });
+    }
+    const current = fromPath(window.location.pathname);
+    const list = createElement('ul');
+    items.forEach(v => {
+        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
+            'aria-current': current === v.route ? 'page' : false,
+            'href': toPath(v.route) + (v.is.folder ? toQuery({
+                chunk: pageChunkDefault,
+                part: pagePartDefault
+            }) : toHash('patch')),
+            'title': 'Edit ' + v.route
+        });
+        link.addEventListener('click', function (e) {
+            list.querySelectorAll('li>a').forEach(v => updateElement(v, false, {
+                'aria-current': false
+            }));
+            updateElement(this, false, {
+                'aria-current': 'page'
+            });
+            updateBusyState(true, applicationMain);
+            updateRoute(this.getAttribute('href'));
+            updateTitle('Loading…');
+            let path = fromPath(this.getAttribute('href')).slice(0, -6),
+                base = decodeURIComponent(toBase(path));
+            loadJSON(hub + '/content' + path).then(r => {
+                // TODO: Handle stale token
+                if (401 === r.status) {
+                    localStorage.removeItem('hub');
+                    updateRoute(toPath('/enter')), view(onExitAfter);
+                    return;
+                }
+                if (200 === r.status) {
+                    console.log(path);
+                    updateActivity(path, Object.assign({
+                        is: {
+                            blob: false,
+                            file: true,
+                            folder: false
+                        },
+                        name: base.split('.').slice(0, -1).join('.'),
+                        route: path,
+                        x: base.split('.').pop()
+                    }, r.data));
+                    updateBusyState(false, applicationMain);
+                    updateElement(applicationMain.querySelector('h3'), [
+                        '📄 ',
+                        createTraces('.' + path)
+                    ]);
+                    updateTitle('Application · File Editor');
+                    let mode = r.data.type,
+                        x = base.split('.').pop();
+                    if (['less', 'scss'].includes(x)) {
+                        mode = 'css';
+                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                        mode = {
+                            base: 'txt' === x ? 'null' : 'markdown',
+                            name: 'yaml-frontmatter'
+                        };
+                    } else if (['yaml', 'yml'].includes(x)) {
+                        mode = 'yaml';
+                    }
+                    if (formFile.$) {
+                        formFile.$.setOption('mode', mode);
+                        formFile.$.setValue(r.data.content);
+                        formFile.$.save();
+                        formFile.$.refresh();
+                        formFile.$.focus();
+                    } else {
+                        formFile.elements.content.value = r.data.content;
+                        formFile.elements.content.focus();
+                    }
+                    formFile.elements.name.value = base;
+                } else {
+                    updateBusyState(false, applicationMain);
+                }
+            }).catch(e => {
+                application.prepend(createAlert(e + "", 'error'));
+            });
+            e.preventDefault();
+        });
+        list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
+            'aria-selected': mark[v.route] ? 'true' : false
+        }));
+    });
+    return list;
+}
+
+function createTraces(path) {
     const span = createElement('span');
     let trace = '/',
         traces = path.split('/'),
@@ -499,6 +805,7 @@ function loadFolders() {
 
 function onBeforeUnload() {
     localStorage.setItem('activity', JSON.stringify(activity));
+    localStorage.setItem('cache', JSON.stringify(cache));
     localStorage.setItem('mark', JSON.stringify(mark));
 }
 
@@ -611,7 +918,9 @@ function onEnter(path, query, hash, then) {
 
 function onExit(path, query, hash, then) {
     activity = [];
+    cache = {};
     localStorage.removeItem('activity');
+    localStorage.removeItem('cache');
     localStorage.removeItem('mark');
     mark = {};
     wasLoadFolders = false;
@@ -670,7 +979,7 @@ function view(then) {
         }
     } else {
         onEnter(path, query, hash, function () {
-            query.part ? viewItems(path, query, hash, then) : ('patch' === hash ? viewItemFileEditorText(path, query, hash, then) : viewItem(path, query, hash, then));
+            query.part ? viewItems(path, query, hash, then) : viewItem(path, query, hash, then);
         });
     }
 }
@@ -687,12 +996,26 @@ function viewEnter(path, query, hash, then) {
 
 function viewItem(path, query, hash, then) {
     clearAlerts();
-    delete mark[path];
+    deleteMark(path);
     pageType = 'file';
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     const itemContent = createElement('code', 'Loading content…');
     loadJSON(hub + '/at' + path).then(r => {
+        if ('patch' === hash) {
+            if (r.data.is.folder) {
+                return viewItemFolderEditor(path, query, hash, then);
+            }
+            if (r.data.is.text) {
+                return viewItemFileEditorText(path, query, hash, then);
+            }
+            updateBusyState(false, applicationMain);
+            updateElement(applicationMain, createElement('p', 'The application’s available editor does not currently allow editing of this type of resource.', {
+                'role': 'status'
+            }));
+            updateTitle('Application · Forbidden');
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -718,7 +1041,7 @@ function viewItem(path, query, hash, then) {
         updateElement(applicationMain, [
             createElement('h3', [
                 '📄 ',
-                createTracesFromString('.' + path)
+                createTraces('.' + path)
             ]),
             createElement('pre', itemContent)
         ]);
@@ -739,7 +1062,6 @@ function viewItem(path, query, hash, then) {
                     } else if (['yaml', 'yml'].includes(x)) {
                         mode = 'yaml';
                     }
-                    console.log(mode);
                     itemContent.classList.add('cm-s', 'cm-s-default');
                     itemContent.textContent = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
@@ -759,33 +1081,19 @@ function viewItem(path, query, hash, then) {
             }
             itemContent.textContent = JSON.stringify(r, null, 2);
         }
-        let i = activity.findIndex(v => r.data.route === v.route);
-        if (-1 !== i) {
-            activity.splice(i, 1); // Remove duplicate
-        }
-        activity.unshift(r.data);
-        if (activity.length > pageChunkDefault) {
-            activity.pop();
-        }
+        updateActivity(r.data.route, r.data);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
         then && then.call(application);
     });
 }
 
-function viewItemFolderEditor(path, query, hash, then) {
-    clearAlerts();
-    delete mark[path];
-    // TODO
-}
-
 function viewItemFileEditorText(path, query, hash, then) {
     clearAlerts();
-    delete mark[path];
+    deleteMark(path);
     pageType = 'file';
     updateBusyState(true, applicationAside);
     updateTitle('Loading…');
-    const listItems = createElement('ul');
     loadJSON(hub + '/at' + toParent(path) + toQuery({
         limit: false,
         x: 1
@@ -802,114 +1110,9 @@ function viewItemFileEditorText(path, query, hash, then) {
         }
         updateBusyState(false, applicationAside);
         updateElement(applicationAside, [
-            createElement('h6', 'Current'),
-            listItems
+            createElement('h6', 'Work'),
+            createListOfWork(r.data.children.filter(v => v.is.text))
         ]);
-        let folderSizeViews = {},
-            hasListItems = false;
-        r.data.children.filter(v => v.is.text).forEach(v => {
-            hasListItems = true;
-            const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-                'aria-current': path === v.route ? 'page' : false,
-                'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault
-                }) : toHash('patch')),
-                'title': (v.is.blob ? 'Open' : 'Edit') + ' ' + v.route
-            });
-            listItemLink.addEventListener('click', v.is.blob ? function (e) {
-                openBlob(this.href);
-                e.preventDefault();
-            } : function (e) {
-                listItems.querySelectorAll('li>a').forEach(v => updateElement(v, false, {
-                    'aria-current': false
-                }));
-                updateElement(this, false, {
-                    'aria-current': 'page'
-                });
-                updateBusyState(true, applicationMain);
-                updateRoute(this.getAttribute('href'));
-                updateTitle('Loading…');
-                let fileRoute = fromPath(this.getAttribute('href')).slice(0, -6),
-                    fileName = decodeURIComponent(toBase(fileRoute));
-                loadJSON(hub + '/content' + fileRoute).then(r => {
-                    // TODO: Handle stale token
-                    if (401 === r.status) {
-                        localStorage.removeItem('hub');
-                        updateRoute(toPath('/enter')), view(onExitAfter);
-                        return;
-                    }
-                    if (200 === r.status) {
-                        updateElement(applicationMain.querySelector('h3'), [
-                            '📄 ',
-                            createTracesFromString('.' + fileRoute)
-                        ]);
-                        updateBusyState(false, applicationMain);
-                        updateTitle('Application · File Editor');
-                        let mode = r.data.type,
-                            x = fileName.split('.').pop();
-                        if (['less', 'scss'].includes(x)) {
-                            mode = 'css';
-                        } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
-                            mode = {
-                                base: 'txt' === x ? 'null' : 'markdown',
-                                name: 'yaml-frontmatter'
-                            };
-                        } else if (['yaml', 'yml'].includes(x)) {
-                            mode = 'yaml';
-                        }
-                        console.log(mode);
-                        if (formFile.$c) {
-                            formFile.$c.setOption('mode', mode);
-                            formFile.$c.setValue(r.data.content);
-                            formFile.$c.save();
-                            formFile.$c.refresh();
-                            formFile.$c.focus();
-                        } else {
-                            formFile.elements.content.value = r.data.content;
-                            formFile.elements.content.focus();
-                        }
-                        formFile.elements.name.value = fileName;
-                        r.data.is = {
-                            blob: false,
-                            file: true,
-                            folder: false
-                        }; // `is` data is not available in `/hub/content/*`
-                        r.data.name = fileName.replace(/\.([\w-]+)$/, ""); // `name` data is not available in `/hub/content/*`
-                        r.data.route = fileRoute; // `route` data is not available in `/hub/content/*`
-                        r.data.x = x; // `x` data is not available in `/hub/content/*`
-                        let i = activity.findIndex(v => r.data.route === v.route);
-                        if (-1 !== i) {
-                            activity.splice(i, 1); // Remove duplicate
-                        }
-                        activity.unshift(r.data);
-                        if (activity.length > pageChunkDefault) {
-                            activity.pop();
-                        }
-                    } else {
-                        updateBusyState(false, applicationMain);
-                    }
-                }).catch(e => {
-                    application.prepend(createAlert(e + "", 'error'));
-                });
-                e.preventDefault();
-            });
-            listItems.append(createElement('li', [
-                v.is.file ? '📄' : '📁',
-                listItemLink
-            ], {
-                'aria-selected': mark[v.route] ? 'true' : false
-            }));
-        });
-        if (!hasListItems) {
-            listItems.append(createElement('li', [
-                createElement('span', 'None', {
-                    'role': 'status'
-                })
-            ], {
-                'aria-disabled': true
-            }));
-        }
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     });
@@ -945,7 +1148,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         updateElement(applicationMain, [
             createElement('h3', [
                 (r.data.is.file ? '📄' : '📂') + ' ',
-                createTracesFromString('.' + path)
+                createTraces('.' + path)
             ]),
             formFile
         ]);
@@ -955,6 +1158,16 @@ function viewItemFileEditorText(path, query, hash, then) {
             formFile.elements.content.style.display = 'none';
             loadJSON(hub + '/content' + path).then(r => {
                 if (200 === r.status) {
+                    updateActivity(path, Object.assign({
+                        is: {
+                            blob: false,
+                            file: true,
+                            folder: false
+                        },
+                        name: toBase(path).split('.').slice(0, -1).join('.'),
+                        route: path,
+                        x: path.split('.').pop()
+                    }, r.data));
                     let mode = r.data.type,
                         x = path.split('.').pop();
                     if (['less', 'scss'].includes(x)) {
@@ -967,17 +1180,16 @@ function viewItemFileEditorText(path, query, hash, then) {
                     } else if (['yaml', 'yml'].includes(x)) {
                         mode = 'yaml';
                     }
-                    console.log(mode);
                     formFile.elements.content.value = r.data.content;
-                    if (formFile.$c) {
-                        formFile.$c.setOption('mode', mode);
-                        formFile.$c.setValue(formFile.elements.content.value);
-                        formFile.$c.save();
-                        formFile.$c.refresh();
-                        formFile.$c.focus();
+                    if (formFile.$) {
+                        formFile.$.setOption('mode', mode);
+                        formFile.$.setValue(formFile.elements.content.value);
+                        formFile.$.save();
+                        formFile.$.refresh();
+                        formFile.$.focus();
                     } else {
                         loadCodeMirror5().then(CodeMirror => {
-                            formFile.$c = CodeMirror.fromTextArea(formFile.elements.content, {
+                            formFile.$ = CodeMirror.fromTextArea(formFile.elements.content, {
                                 autoCloseBrackets: true,
                                 autofocus: true,
                                 lineNumbers: true,
@@ -986,16 +1198,15 @@ function viewItemFileEditorText(path, query, hash, then) {
                                 scrollbarStyle: 'simple',
                                 viewportMargin: Infinity
                             });
-                            formFile.$c.refresh();
-                            formFile.addEventListener('submit', () => formFile.$c.save());
+                            formFile.$.refresh();
                             // If content is longer than the maximum height or width, move cursor to the start of the editor
-                            formFile.$c.on('focus', function () {
-                                let pane = formFile.$c.getScrollerElement(),
-                                    maxRows = formFile.$c.lineCount(),
+                            formFile.$.on('focus', function () {
+                                let pane = formFile.$.getScrollerElement(),
+                                    maxRows = formFile.$.lineCount(),
                                     moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
-                                formFile.$c.setCursor(moveToStart ? 0 : maxRows, 0);
+                                formFile.$.setCursor(moveToStart ? 0 : maxRows, 0);
                                 if (moveToStart) {
-                                    formFile.$c.scrollTo(0, 0);
+                                    formFile.$.scrollTo(0, 0);
                                 }
                             });
                         }).catch(e => {
@@ -1003,22 +1214,6 @@ function viewItemFileEditorText(path, query, hash, then) {
                             formFile.elements.content.style.display = "";
                             formFile.elements.content.focus();
                         });
-                    }
-                    r.data.is = {
-                        blob: false,
-                        file: true,
-                        folder: false
-                    }; // `is` data is not available in `/hub/content/*`
-                    r.data.name = toBase(path).replace(/\.([\w-]+)$/, ""); // `name` data is not available in `/hub/content/*`
-                    r.data.route = path; // `route` data is not available in `/hub/content/*`
-                    r.data.x = x; // `x` data is not available in `/hub/content/*`
-                    let i = activity.findIndex(v => r.data.route === v.route);
-                    if (-1 !== i) {
-                        activity.splice(i, 1); // Remove duplicate
-                    }
-                    activity.unshift(r.data);
-                    if (activity.length > pageChunkDefault) {
-                        activity.pop();
                     }
                 }
             }).catch(e => {
@@ -1031,47 +1226,82 @@ function viewItemFileEditorText(path, query, hash, then) {
     });
 }
 
+function viewItemFolderEditor(path, query, hash, then) {
+    clearAlerts();
+    deleteMark(path);
+    pageType = 'folder';
+    updateBusyState(true, applicationAside);
+    updateTitle('Loading…');
+    loadJSON(hub + '/at' + toParent(path) + toQuery({
+        limit: false,
+        x: 1
+    })).then(r => {
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            return;
+        }
+        if (403 === r.status) {
+            return;
+        }
+        if (404 === r.status) {
+            return;
+        }
+        updateBusyState(false, applicationAside);
+        updateElement(applicationAside, [
+            createElement('h6', 'Work'),
+            createListOfWork(r.data.children.filter(v => v.is.folder))
+        ]);
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+    });
+    updateBusyState(true, applicationMain);
+    updateTitle('Loading…');
+    loadJSON(hub + '/at' + path).then(r => {
+        // TODO: Handle stale token
+        if (401 === r.status) {
+            localStorage.removeItem('hub');
+            updateRoute(toPath('/enter')), view(onExitAfter);
+            return;
+        }
+        if (403 === r.status) {
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            });
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Forbidden');
+            return;
+        }
+        if (404 === r.status) {
+            onExit(path, query, hash, function () {
+                application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            });
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Not Found');
+            return;
+        }
+        formFolder.action = hub + '/at' + path;
+        formFolder.elements.name.value = r.data.name;
+        updateElement(applicationMain, [
+            createElement('h3', [
+                '📂 ',
+                createTraces('.' + path)
+            ]),
+            formFolder
+        ]);
+        updateBusyState(false, applicationMain);
+        updateTitle('Application · Folder Editor');
+    }).catch(e => {
+        application.prepend(createAlert(e + "", 'error'));
+        then && then.call(application);
+    });
+}
+
 function viewItems(path, query, hash, then) {
     clearAlerts();
-    delete mark[path];
+    deleteMark(path);
     pageType = 'folder';
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
-    const listItems = createElement('ul');
-    const listItemsOfActivity = createElement('ul');
-    if (activity.length) {
-        activity.forEach(v => {
-            const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-                'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault
-                }) : '#update'),
-                'title': (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
-            });
-            listItemLink.addEventListener('click', v.is.blob ? function (e) {
-                openBlob(this.href);
-                e.preventDefault();
-            } : function (e) {
-                let route = fromPath(this.getAttribute('href'));
-                updateRoute(toPath(route)), view();
-                e.preventDefault();
-            });
-            listItemsOfActivity.append(createElement('li', [
-                v.is.file ? '📄' : '📁',
-                listItemLink
-            ], {
-                'aria-selected': mark[v.route] ? 'true' : false
-            }));
-        });
-    } else {
-        listItemsOfActivity.append(createElement('li', [
-            createElement('span', 'None', {
-                'role': 'status'
-            })
-        ], {
-            'aria-disabled': true
-        }));
-    }
     loadJSON(hub + '/at' + path + toQuery({
         chunk: query.chunk,
         part: query.part
@@ -1106,30 +1336,24 @@ function viewItems(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        let parent = r.data.parent;
+        updateActivity(r.data.route, r.data);
         updateBusyState(false, applicationMain);
         updateElement(applicationAside, [
             createElement('h6', 'Activity'),
-            listItemsOfActivity
+            createListOfActivity()
         ]);
+        let parent = r.data.parent;
+        if (parent) {
+            parent.name = '..';
+            r.data.children.unshift(parent);
+        }
         updateElement(applicationMain, [
             createElement('h3', [
                 '📂 ',
-                createTracesFromString('.' + path)
+                createTraces('.' + path)
             ]),
-            listItems
-        ]);
-        updateTitle('Application · Folder');
-        let i = activity.findIndex(v => r.data.route === v.route);
-        if (-1 !== i) {
-            activity.splice(i, 1); // Remove duplicate
-        }
-        activity.unshift(r.data);
-        if (activity.length > pageChunkDefault) {
-            activity.pop();
-        }
-        if (r.data.has.next || r.data.has.prev) {
-            listItems.after(createElement('nav', [
+            createList(r.data.children, path, query, hash),
+            r.data.has.next || r.data.has.prev ? createElement('nav', [
                 createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
                     if (current || disabled) {
                         this.addEventListener('click', e => e.preventDefault());
@@ -1143,116 +1367,9 @@ function viewItems(path, query, hash, then) {
                 }, 'First', 'Previous', 'Next', 'Last')
             ], {
                 'aria-label': 'Pagination'
-            }));
-        }
-        if (parent) {
-            parent.name = '..';
-            r.data.children.unshift(parent);
-        }
-        let folderSizeViews = {};
-        r.data.children.forEach(v => {
-            const listItemLink = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-                'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault
-                }) : ""),
-                'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
-            });
-            const listItemLinkDelete = createElement('a', '🗑️', {
-                'href': toPath(v.route) + toHash('delete'),
-                'title': 'Delete ' + v.route
-            });
-            const listItemLinkEdit = createElement('a', '📝', {
-                'href': toPath(v.route) + toHash('patch'),
-                'title': 'Edit ' + v.route
-            });
-            const listItemLinkOpen = createElement('a', '🔍', {
-                'href': listItemLink.href,
-                'title': 'Open ' + v.route
-            });
-            const listItemLinkView = createElement('a', '👁', {
-                'href': hub + '/blob' + v.route,
-                'title': 'View ' + v.route
-            });
-            const listItemLinks = createElement('span', v.is.folder ? listItemLinkOpen : listItemLinkView, {
-                'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
-            });
-            if ('..' !== v.name) {
-                listItemLinks.append(listItemLinkEdit, listItemLinkDelete);
-            } else {
-                listItemLinks.append(createElement('span', listItemLinkEdit.textContent, {
-                    'aria-disabled': 'true'
-                }), createElement('span', listItemLinkDelete.textContent, {
-                    'aria-disabled': 'true'
-                }));
-            }
-            const listItemSize = createElement('span', v.size ?? '…', {
-                'role': 'status'
-            });
-            if (v.is.folder) {
-                folderSizeViews[v.route] = listItemSize;
-            }
-            listItemLink.addEventListener('click', v.is.blob ? function (e) {
-                openBlob(this.href);
-                e.preventDefault();
-            } : onClick);
-            listItemLinkDelete.addEventListener('click', function (e) {
-                let pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7);
-                loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
-                    if (200 === r.status) {
-                        delete mark[pathToDelete];
-                        let i = activity.findIndex(v => pathToDelete === v.route);
-                        if (-1 !== i) {
-                            activity.splice(i, 1);
-                        }
-                        viewItems(path, query, hash, function () {
-                            // application.prepend(createAlert(r.description, 'success'));
-                        });
-                    }
-                }).catch(e => {
-                    application.prepend(createAlert(e + "", 'error'));
-                });
-                e.preventDefault();
-            });
-            listItemLinkEdit.addEventListener('click', function (e) {
-                let route = fromPath(this.getAttribute('href'));
-                updateRoute(toPath(route)), view();
-                e.preventDefault();
-            });
-            listItemLinkOpen.addEventListener('click', function (e) {
-                listItemLink.click();
-                e.preventDefault();
-            });
-            listItemLinkView.addEventListener('click', v.is.blob ? function (e) {
-                openBlob(this.href);
-                e.preventDefault();
-            } : function (e) {
-                listItemLink.click();
-                e.preventDefault();
-            });
-            listItems.append(createElement('li', [
-                v.is.file ? '📄' : '📁',
-                listItemLink,
-                listItemSize,
-                listItemLinks
-            ], {
-                'aria-selected': mark[v.route] ? 'true' : false
-            }));
-        });
-        // Calculate folder size then view
-        for (let route in folderSizeViews) {
-            (() => {
-                let listItemSize = folderSizeViews[route];
-                if (!listItemSize.offsetHeight && !listItemSize.offsetWidth) {
-                    return; // Hidden from view
-                }
-                loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abortController.signal }).then(r => {
-                    if (200 === r.status) {
-                        listItemSize.innerHTML = r.data.size;
-                    }
-                }).catch(e => {});
-            })();
-        }
+            }) : ""
+        ]);
+        updateTitle('Application · Folder');
         then && then.call(application);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
@@ -1267,8 +1384,6 @@ if ('/' !== fromPath(window.location.pathname) || "" !== window.location.search)
 window.addEventListener('hashchange', onHashChange);
 window.addEventListener('beforeunload', onBeforeUnload);
 window.addEventListener('popstate', onPopState);
-
-view();
 
 let formFileNew, formFolderNew;
 
@@ -1336,15 +1451,8 @@ formFileNew.addEventListener('submit', function (e) {
     }).then(r => {
         if (201 === r.status) {
             dialogFileNew.close();
-            mark[r.data.route] = 1;
-            let i = activity.findIndex(v => r.data.route === v.route);
-            if (-1 !== i) {
-                activity.splice(i, 1); // Remove duplicate
-            }
-            activity.unshift(r.data);
-            if (activity.length > pageChunkDefault) {
-                activity.pop();
-            }
+            updateActivity(r.data.route, r.data);
+            updateMark(r.data.route);
             viewItems(path, {
                 chunk: pageChunkDefault,
                 part: pagePartDefault
@@ -1378,7 +1486,7 @@ formFolderNew.addEventListener('submit', function (e) {
         if (201 === r.status) {
             dialogFolderNew.close();
             route.split('/').map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
-                mark[path + '/' + s] = 1;
+                updateMark(path + '/' + s);
             });
             updateRoute(toPath(path + '/' + route) + toQuery({
                 chunk: pageChunkDefault,
@@ -1401,5 +1509,7 @@ formFolderNew.addEventListener('submit', function (e) {
 });
 
 document.body.append(dialogFileNew, dialogFolderNew);
+
+view();
 
 // })();
