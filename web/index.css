@@ -502,3 +502,11 @@ form .CodeMirror-simplescroll-vertical {
 form .CodeMirror * + div {
   margin-top: 0;
 }
+
+.v-video .v-loader {
+  margin: 0;
+}
+
+.v-video .v-loaderContent {
+  white-space: nowrap;
+}

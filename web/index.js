@@ -282,16 +282,16 @@ function createList(items, path, query, hash) {
     const list = createElement('ul');
     items.forEach(v => {
         const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-            'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
+            'href': /* v.is.blob ? hub + '/blob' + v.route : */toPath(v.route) + (v.is.folder ? toQuery({
                 chunk: pageChunkDefault,
                 part: pagePartDefault
             }) : ""),
             'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
         });
-        link.addEventListener('click', v.is.blob ? function (e) {
+        link.addEventListener('click', /* v.is.blob ? function (e) {
             openBlob(this.href);
             e.preventDefault();
-        } : onClick);
+        } : */onClick);
         const linkDelete = createElement('a', '🗑️', {
             'href': toPath(v.route) + toHash('delete'),
             'title': 'Delete ' + v.route
@@ -744,6 +744,36 @@ function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
     }));
 }
 
+function loadVLiteJS() {
+    if (window.Vlitejs) {
+        return Promise.resolve(window.Vlitejs);
+    }
+    const info = createAlert('Loading VLiteJS library…', 'info');
+    application.prepend(info);
+    return Promise.all([
+        loadCSS('https://cdn.jsdelivr.net/npm/vlitejs@6/dist/vlite.css'),
+        new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.textContent = `
+                import Vlitejs from 'https://cdn.jsdelivr.net/npm/vlitejs@6/+esm';
+                window.Vlitejs = Vlitejs;
+                window.dispatchEvent(new Event('vlitejs:loaded'));
+            `;
+            window.addEventListener('vlitejs:loaded', () => {
+                resolve(window.Vlitejs);
+            }, { once: true });
+            script.onerror = reject;
+            document.head.append(script);
+        })
+    ]).then(() => {
+        info.remove();
+        return window.Vlitejs;
+    }).catch(e => {
+        updateAlert(info, e + '', 'error');
+    });
+}
+
 function onBeforeUnload() {
     localStorage.setItem('activity', JSON.stringify(activity));
     localStorage.setItem('cache', JSON.stringify(cache));
@@ -1138,7 +1168,15 @@ function viewItem(path, query, hash, then) {
             } else if ('image/' === r.data.type.slice(0, 6)) {
                 console.log('load image viewer');
             } else if ('video/' === r.data.type.slice(0, 6)) {
-                console.log('load video player');
+                content.style.display = 'none';
+                const video = createElement('video', false, {
+                    'src': toParent(hub) + r.data.route
+                });
+                content.before(video);
+                loadVLiteJS().then(Vlitejs => {
+                    new Vlitejs(video);
+                }).catch(e => {});
+                return;
             }
             content.textContent = JSON.stringify(r, null, 2);
         }
