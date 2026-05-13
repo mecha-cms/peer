@@ -35,7 +35,7 @@ const formFile = createElement('form', [
     createElement('p', [
         createElement('input', false, {
             'name': 'name',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)\\.[A-Za-z\\d]+',
+            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+',
             'placeholder': 'foo-bar.baz',
             'style': 'flex:1;',
             'type': 'text'
@@ -346,7 +346,9 @@ function createList(items, path, query, hash) {
         if ('..' !== v.name) {
             links.append(linkEdit, linkDelete);
         } else {
-            links.append(linkEdit, createElement('span', linkDelete.textContent, {
+            links.append(v.route.slice(1).includes('/') ? linkEdit : createElement('span', linkEdit.textContent, {
+                'aria-disabled': 'true'
+            }), createElement('span', linkDelete.textContent, {
                 'aria-disabled': 'true'
             }));
         }
@@ -416,7 +418,7 @@ function createListOfWork(items, patch) {
         const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
             'aria-current': current === v.route ? 'page' : false,
             'href': toPath(v.route) + (patch ? toHash('patch') : ""),
-            'title': 'Edit ' + v.route
+            'title': (patch ? 'Edit' : 'View') + ' ' + v.route
         });
         link.addEventListener('click', function (e) {
             list.querySelectorAll('li>a').forEach(v => updateElement(v, false, {
@@ -435,6 +437,11 @@ function createListOfWork(items, patch) {
             base = decodeURIComponent(toBase(path));
             loadJSON(hub + '/content' + path).then(r => {
                 updateBusyState(false, applicationMain);
+                if (400 === r.status) {
+                    application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+                    updateTitle('Application · Bad Request');
+                    return;
+                }
                 // TODO: Handle stale token
                 if (401 === r.status) {
                     localStorage.removeItem('hub');
@@ -487,6 +494,7 @@ function createListOfWork(items, patch) {
                         content.textContent = r.data.content;
                         loadCodeMirror5().then(CodeMirror => {
                             CodeMirror.runMode(r.data.content, mode, content);
+                            content.focus();
                         }).catch(e => {
                             application.prepend(createAlert(e + "", 'error'));
                         });
@@ -725,7 +733,7 @@ function loadJS(src) {
 function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
     return f3h(path, method, headers, body, options).then(r => r.json().then(r => {
         console.groupCollapsed('🌐 ' + method + ' ' + path);
-        if ('GET' === method && -1 !== path.indexOf('?')) {
+        if ('GET' === method && path.includes('?')) {
             console.log('📤', fromQuery(path.split('?').pop()));
         } else if (body) {
             console.log('📤', body);
@@ -825,6 +833,7 @@ function onEnter(path, query, hash, then) {
                     'value': ""
                 }),
                 createElement('option', '🏠 Home', {
+                    'data-home': 1,
                     'value': 'asset'
                 })
             ]);
@@ -840,7 +849,14 @@ function onEnter(path, query, hash, then) {
             chunk: pageChunkDefault,
             part: pagePartDefault
         }));
-        viewItems(path, query);
+        if (this.options[this.selectedIndex].getAttribute('data-home')) {
+            // Refresh option(s)
+            onEnter(path, query, "", function () {
+                viewItems(path, query);
+            });
+        } else {
+            viewItems(path, query);
+        }
         e.preventDefault();
     });
     updateElement(applicationHeader, createElement('div', [options, createFile, createFolder, formSearch, exit], {
@@ -1025,12 +1041,25 @@ function viewItem(path, query, hash, then) {
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
+        if ('patch' === hash && ![400, 401, 403, 404].includes(r.status)) {
+            if (r.data.is.folder) {
+                return viewItemFolderEditor(path, query, hash, then);
+            }
+            if (r.data.is.text) {
+                return viewItemFileEditorText(path, query, hash, then);
+            }
+            application.prepend(createAlert('No editor is available for the <code>' + r.data.type + '</code> resource type.', 'error'));
+            updateBusyState(false, applicationAside);
+            updateBusyState(false, applicationMain);
+            updateTitle('Application · Forbidden');
+            return;
+        }
         loadJSON(hub + '/at' + toParent(path) + toQuery({
             limit: false,
             x: 1 // List file(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
-            if ([401, 403, 404].includes(r.status)) {
+            if ([400, 401, 403, 404].includes(r.status)) {
                 return;
             }
             updateElement(applicationAside, [
@@ -1041,6 +1070,11 @@ function viewItem(path, query, hash, then) {
             application.prepend(createAlert(e + "", 'error'));
         });
         updateBusyState(false, applicationMain);
+        if (400 === r.status) {
+            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            updateTitle('Application · Bad Request');
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -1061,20 +1095,9 @@ function viewItem(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        if ('patch' === hash) {
-            if (r.data.is.folder) {
-                return viewItemFolderEditor(path, query, hash, then);
-            }
-            if (r.data.is.text) {
-                return viewItemFileEditorText(path, query, hash, then);
-            }
-            updateElement(applicationMain, createElement('p', 'The application’s available editor does not currently allow editing of this type of resource.', {
-                'role': 'status'
-            }));
-            updateTitle('Application · Forbidden');
-            return;
-        }
-        const content = createElement('code', 'Loading content…');
+        const content = createElement('code', 'Loading content…', {
+            'tabindex': 0
+        });
         updateActivity(r.data.route, r.data);
         updateElement(applicationMain, [
             createElement('h3', [
@@ -1103,6 +1126,7 @@ function viewItem(path, query, hash, then) {
                     content.textContent = r.data.content;
                     loadCodeMirror5().then(CodeMirror => {
                         CodeMirror.runMode(r.data.content, mode, content);
+                        content.focus();
                     }).catch(e => {
                         application.prepend(createAlert(e + "", 'error'));
                     });
@@ -1140,7 +1164,7 @@ function viewItemFileEditorText(path, query, hash, then) {
             x: 1 // List file(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
-            if ([401, 403, 404].includes(r.status)) {
+            if ([400, 401, 403, 404].includes(r.status)) {
                 return;
             }
             updateElement(applicationAside, [
@@ -1151,6 +1175,11 @@ function viewItemFileEditorText(path, query, hash, then) {
             application.prepend(createAlert(e + "", 'error'));
         });
         updateBusyState(false, applicationMain);
+        if (400 === r.status) {
+            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            updateTitle('Application · Bad Request');
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -1172,7 +1201,6 @@ function viewItemFileEditorText(path, query, hash, then) {
             return;
         }
         formFile.action = hub + '/at' + path;
-        // Use the previous `CodeMirror` instance
         formFile.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
         formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
         updateActivity(r.data.route, r.data);
@@ -1272,7 +1300,7 @@ function viewItemFolderEditor(path, query, hash, then) {
             x: 0 // List folder(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
-            if ([401, 403, 404].includes(r.status)) {
+            if ([400, 401, 403, 404].includes(r.status)) {
                 return;
             }
             updateElement(applicationAside, [
@@ -1283,6 +1311,11 @@ function viewItemFolderEditor(path, query, hash, then) {
             application.prepend(createAlert(e + "", 'error'));
         });
         updateBusyState(false, applicationMain);
+        if (400 === r.status) {
+            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            updateTitle('Application · Bad Request');
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -1335,6 +1368,11 @@ function viewItems(path, query, hash, then) {
     })).then(r => {
         updateBusyState(false, applicationAside);
         updateBusyState(false, applicationMain);
+        if (400 === r.status) {
+            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            updateTitle('Application · Bad Request');
+            return;
+        }
         // TODO: Handle stale token
         if (401 === r.status) {
             localStorage.removeItem('hub');
@@ -1413,7 +1451,7 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
         createElement('input', false, {
             'autofocus': true,
             'name': 'name',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)\\.[A-Za-z\\d]+',
+            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+',
             'placeholder': 'foo-bar.baz',
             'required': true,
             'type': 'text'

@@ -269,7 +269,6 @@ pre code {
 
 :where(aside, main):empty {
   background: rgb(0 0 0 / 0.025);
-  cursor: wait;
   min-height: 12em;
 }
 
