@@ -1572,10 +1572,10 @@ formFolderNew.addEventListener('submit', function (e) {
     let path = fromPath(window.location.pathname);
     let route = this.elements.name.value,
         routeName = toBase(route),
-        routeParent = toParent(route);
+        routeSub = toParent(route);
     loadJSON(hub + '/at' + path, 'PUT', {}, {
         name: routeName,
-        route: routeParent
+        sub: routeSub
     }).then(r => {
         if (201 === r.status) {
             dialogFolderNew.close();
