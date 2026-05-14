@@ -477,6 +477,7 @@ function createListOfWork(items, patch) {
                         mode = 'yaml';
                     }
                     if (patch) {
+                        formFile.action = hub + '/at' + path;
                         if (formFile.$) {
                             formFile.$.setOption('mode', mode);
                             formFile.$.setValue(r.data.content);
