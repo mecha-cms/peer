@@ -811,7 +811,8 @@ function onEnter(path, query, hash, then) {
     });
     // Folder navigation select-box
     const options = createElement('select', false, {
-        'aria-busy': 'true'
+        'aria-busy': 'true',
+        'disabled': true
     });
     const value = path.split('/')[2] || "";
     let selected;
@@ -870,6 +871,7 @@ function onEnter(path, query, hash, then) {
             ]);
             options.value = "";
         }
+        options.disabled = false;
         updateBusyState(false, options);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
@@ -1085,6 +1087,7 @@ function viewItem(path, query, hash, then) {
             updateTitle('Application · Forbidden');
             return;
         }
+        let type = r.data.type;
         loadJSON(hub + '/at' + toParent(path) + toQuery({
             limit: false,
             x: 1 // List file(s) only
@@ -1095,7 +1098,7 @@ function viewItem(path, query, hash, then) {
             }
             updateElement(applicationAside, [
                 createElement('h6', 'Work'),
-                createListOfWork(r.data.children.filter(v => v.is.text))
+                createListOfWork(r.data.children.filter(v => (type || "").split('/').shift() === (v.type || "").split('/').shift()))
             ]);
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
