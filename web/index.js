@@ -1126,7 +1126,7 @@ function viewItem(path, query, hash, then) {
             updateTitle('Application · Forbidden');
             return;
         }
-        let type = r.data.type;
+        let type = r.data?.type || "";
         loadJSON(hub + '/at' + toParent(path) + toQuery({
             limit: false,
             x: 1 // List file(s) only
