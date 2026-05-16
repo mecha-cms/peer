@@ -125,8 +125,11 @@ let abort = new AbortController,
     mark = JSON.parse(localStorage.getItem('mark') || '{}'),
     sizes = {};
 
-let pageChunkDefault = 20,
-    pagePartDefault = 1,
+const q = fromQuery(window.location.search);
+
+let pageChunkDefault = q.chunk ?? 20,
+    pagePartDefault = q.part ?? 1,
+    pageSortDefault = q.sort ?? null,
     pageType = false;
 
 formFile.addEventListener('submit', function (e) {
@@ -143,7 +146,8 @@ formFile.addEventListener('submit', function (e) {
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
                     chunk: pageChunkDefault,
-                    part: pagePartDefault
+                    part: pagePartDefault,
+                    sort: pageSortDefault
                 }));
                 viewItems(pathParent, query, "", function () {
                     application.prepend(createAlert(r.description, 'success'));
@@ -183,7 +187,8 @@ formFolder.addEventListener('submit', function (e) {
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
                     chunk: pageChunkDefault,
-                    part: pagePartDefault
+                    part: pagePartDefault,
+                    sort: pageSortDefault
                 }));
                 viewItems(pathParent, query, "", function () {
                     application.prepend(createAlert(r.description, 'success'));
@@ -246,7 +251,8 @@ formUser.addEventListener('submit', function (e) {
             path = '/lot/asset',
             query = {
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             };
         updateBusyState(false, this);
         onEnter(path, query, hash, function () {
@@ -284,7 +290,8 @@ function createList(items, path, query, hash) {
         const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
             'href': /* v.is.blob ? hub + '/blob' + v.route : */toPath(v.route) + (v.is.folder ? toQuery({
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             }) : ""),
             'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
         });
@@ -394,7 +401,8 @@ function createListOfActivity() {
             'aria-current': current === v.route ? 'page' : false,
             'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             }) : ""),
             'title': (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
         });
@@ -589,7 +597,8 @@ function createTraces(path) {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
                 'href': toPath(trace.slice(1)) + (tracesMax === k + 1 ? "" : toQuery({
                     chunk: pageChunkDefault,
-                    part: pagePartDefault
+                    part: pagePartDefault,
+                    sort: pageSortDefault
                 }))
             });
             a.addEventListener('click', onClick);
@@ -622,13 +631,42 @@ function fromPath(path, base) {
 function fromQuery(query) {
     return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
         v = toValue(v);
-        if ('[]' === k.slice(-2)) {
-            if (!a[k = k.slice(0, -2)]) {
-                a[k] = [];
+        let key = "", keys = [];
+        for (const c of k) {
+            if ('[' === c) {
+                keys.push(key);
+                key = "";
+            } else if (']' !== c) {
+                key += c;
             }
-            a[k].push(v);
-        } else {
-            a[k] = v;
+        }
+        keys.push(key);
+        let parent, parentKey, ref = a;
+        for (let i = 0, j = keys.length; i < j; ++i) {
+            let k = keys[i],
+                last = i === j - 1,
+                next = keys[i + 1],
+                numeric = ("" + +k) === k;
+            // Convert array to object if non-numeric key is used
+            if (Array.isArray(ref) && !numeric && "" !== k) {
+                let o = Object.assign({}, ref);
+                if (parent) {
+                    parent[parentKey] = o;
+                } else {
+                    a = o;
+                }
+                ref = o;
+            }
+            if (last) {
+                ref[Array.isArray(ref) && numeric ? +k : k] = v;
+            } else {
+                if (!(k in ref)) {
+                    ref[k] = "" === next || ("" + +next) === next ? [] : {};
+                }
+                parent = ref;
+                parentKey = k;
+                ref = ref[k];
+            }
         }
         return a;
     }, {});
@@ -880,7 +918,8 @@ function onEnter(path, query, hash, then) {
         let path = '/lot/' + this.value, query;
         updateRoute(toPath(path) + toQuery(query = {
             chunk: pageChunkDefault,
-            part: pagePartDefault
+            part: pagePartDefault,
+            sort: pageSortDefault
         }));
         if (this.options[this.selectedIndex].getAttribute('data-home')) {
             // Refresh option(s)
@@ -968,7 +1007,7 @@ function toPath(path) {
 }
 
 function toQuery(lot) {
-    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => Array.isArray(v) ? v.map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
+    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => null === v ? [] : Array.isArray(v) ? v.filter(vv => null !== vv).map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
 }
 
 function toValue(v) {
@@ -1406,7 +1445,9 @@ function viewItems(path, query, hash, then) {
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path + toQuery({
         chunk: query.chunk,
-        part: query.part
+        part: query.part,
+        query: query.query || null,
+        sort: query.sort || null
     })).then(r => {
         updateBusyState(false, applicationAside);
         updateBusyState(false, applicationMain);
@@ -1555,7 +1596,8 @@ formFileNew.addEventListener('submit', function (e) {
             updateMark(r.data.route);
             viewItems(path, {
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             });
             this.reset();
         } else {
@@ -1588,11 +1630,13 @@ formFolderNew.addEventListener('submit', function (e) {
             });
             updateRoute(toPath(path + '/' + route) + toQuery({
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             }));
             viewItems(path + '/' + route, {
                 chunk: pageChunkDefault,
-                part: pagePartDefault
+                part: pagePartDefault,
+                sort: pageSortDefault
             });
             this.reset();
         } else {
