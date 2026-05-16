@@ -127,6 +127,8 @@ let abort = new AbortController,
 
 const q = fromQuery(window.location.search);
 
+console.log(q);
+
 let pageChunkDefault = q.chunk ?? 20,
     pagePartDefault = q.part ?? 1,
     pageSortDefault = q.sort ?? null,
@@ -610,10 +612,8 @@ function createTraces(path) {
 
 function deleteActivity(route, deep) {
     for (let i = activity.length - 1; i >= 0; --i) {
-        if (route === activity[i].route) {
-            activity.splice(i, 1);
-        }
-        if (deep && 0 === (activity[i].route + '/').indexOf(route + '/')) {
+        const current = activity[i].route;
+        if (route === current || (deep && 0 === (current + '/').indexOf(route + '/'))) {
             activity.splice(i, 1);
         }
     }
@@ -631,48 +631,62 @@ function fromPath(path, base) {
     return path.slice((base || sub).length);
 }
 
-function fromQuery(query) {
-    return Array.from(new URLSearchParams(query)).reduce((a, [k, v]) => {
-        v = toValue(v);
-        let key = "", keys = [];
-        for (const c of k) {
-            if ('[' === c) {
-                keys.push(key);
+function fromQuery(query, parseValue = true, defaultValue = true) {
+    if ('?' === query[0]) {
+        query = query.slice(1);
+    }
+    let r = {};
+    query.split('&').forEach(q => {
+        let current = r,
+            i = q.indexOf('='),
+            key = "", keys = [],
+            [k, v] = -1 === i ? [q] : [q.slice(0, i), q.slice(i + 1)];
+        if ('undefined' === typeof v) {
+            v = defaultValue;
+        } else {
+            v = decodeURIComponent(v);
+            v = parseValue ? toValue(v) : v;
+        }
+        for (const s of k) {
+            if ('[' === s) {
+                keys.push(decodeURIComponent(key));
                 key = "";
-            } else if (']' !== c) {
-                key += c;
+            } else if (']' !== s) {
+                key += s;
             }
         }
-        keys.push(key);
-        let parent, parentKey, ref = a;
+        keys.push(decodeURIComponent(key));
         for (let i = 0, j = keys.length; i < j; ++i) {
             let k = keys[i],
-                last = i === j - 1,
-                next = keys[i + 1],
-                numeric = ("" + +k) === k;
-            // Convert array to object if non-numeric key is used
-            if (Array.isArray(ref) && !numeric && "" !== k) {
-                let o = Object.assign({}, ref);
-                if (parent) {
-                    parent[parentKey] = o;
-                } else {
-                    a = o;
-                }
-                ref = o;
+                next = keys[i + 1];
+            if ("" === k) {
+                k = Object.keys(current).length + "";
             }
-            if (last) {
-                ref[Array.isArray(ref) && numeric ? +k : k] = v;
+            if (j - 1 === i) {
+                current[k] = v;
             } else {
-                if (!(k in ref)) {
-                    ref[k] = "" === next || ("" + +next) === next ? [] : {};
+                if (!(k in current)) {
+                    current[k] = {};
                 }
-                parent = ref;
-                parentKey = k;
-                ref = ref[k];
+                current = current[k];
             }
         }
-        return a;
-    }, {});
+    });
+    return fromQueryObject(r);
+}
+
+function fromQueryObject(o) {
+    if (!o || 'object' !==  typeof o) {
+        return o;
+    }
+    for (const k in o) {
+        o[k] = fromQueryObject(o[k]);
+    }
+    const keys = Object.keys(o);
+    if (keys.length && keys.every((k, i) => i + "" === k)) {
+        return keys.map(k => o[k]);
+    }
+    return o;
 }
 
 function fromValue(v) {
@@ -752,7 +766,7 @@ function loadFolders() {
         return foldersPromise;
     }
     foldersPromise = loadJSON(hub + '/at/lot' + toQuery({
-        limit: false,
+        limit: 'false',
         x: 0
     })).then(r => {
         return (folders = r.data.children);
@@ -1009,8 +1023,23 @@ function toPath(path) {
     return sub + path;
 }
 
-function toQuery(lot) {
-    return '?' + new URLSearchParams(Object.entries(lot).flatMap(([k, v]) => null === v ? [] : Array.isArray(v) ? v.filter(vv => null !== vv).map(vv => [k + '[]', fromValue(vv)]) : [[k, fromValue(v)]]));
+function toQuery(object, path = "", list = []) {
+    if (Array.isArray(object)) {
+        for (let i = 0, j = object.length; i < j; ++i) {
+            if (i in object) {
+                toQuery(object[i], path + '[]', list);
+            }
+        }
+    } else if (object && 'object' === typeof object) {
+        for (const k in object) {
+            toQuery(object[k], path ? path + '[' + encodeURIComponent(k) + ']' : encodeURIComponent(k), list);
+        }
+    } else if (true === object) {
+        list.push(path);
+    } else if (false !== object && null !== object) {
+        list.push(path + '=' + encodeURIComponent(fromValue(object)));
+    }
+    return list.length ? '?' + list.join('&') : null;
 }
 
 function toValue(v) {
@@ -1131,7 +1160,7 @@ function viewItem(path, query, hash, then) {
         }
         let type = r.data?.type || "";
         loadJSON(hub + '/at' + toParent(path) + toQuery({
-            limit: false,
+            limit: 'false',
             x: 1 // List file(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
@@ -1244,7 +1273,7 @@ function viewItemFileEditorText(path, query, hash, then) {
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
         loadJSON(hub + '/at' + toParent(path) + toQuery({
-            limit: false,
+            limit: 'false',
             x: 1 // List file(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
@@ -1380,7 +1409,7 @@ function viewItemFolderEditor(path, query, hash, then) {
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
         loadJSON(hub + '/at' + toParent(path) + toQuery({
-            limit: false,
+            limit: 'false',
             x: 0 // List folder(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
