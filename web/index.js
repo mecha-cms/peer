@@ -142,7 +142,7 @@ formFile.addEventListener('submit', function (e) {
     if ('delete' === task) {
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
-                deleteActivity(path);
+                deleteActivity(path, true);
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
                     chunk: pageChunkDefault,
@@ -183,7 +183,7 @@ formFolder.addEventListener('submit', function (e) {
     if ('delete' === task) {
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
-                deleteActivity(path);
+                deleteActivity(path, true);
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
                     chunk: pageChunkDefault,
@@ -307,7 +307,7 @@ function createList(items, path, query, hash) {
             let pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7);
             loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
                 if (200 === r.status) {
-                    deleteActivity(pathToDelete);
+                    deleteActivity(pathToDelete, true);
                     deleteMark(pathToDelete);
                     viewItems(path, query, hash, function () {
                         // application.prepend(createAlert(r.description, 'success'));
@@ -608,9 +608,12 @@ function createTraces(path) {
     return span;
 }
 
-function deleteActivity(route) {
+function deleteActivity(route, deep) {
     for (let i = activity.length - 1; i >= 0; --i) {
         if (route === activity[i].route) {
+            activity.splice(i, 1);
+        }
+        if (deep && 0 === (activity[i].route + '/').indexOf(route + '/')) {
             activity.splice(i, 1);
         }
     }
