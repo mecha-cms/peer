@@ -17,11 +17,11 @@ const sub = toParent(document.currentScript.src).slice((window.location.protocol
 
 const application = document.querySelector('[role=application]');
 
-const applicationAside = createElement('aside');
+const applicationAside = createElement('aside', false, { 'aria-busy': 'true' });
 const applicationFlex = createElement('div');
 const applicationFooter = createElement('footer');
-const applicationHeader = createElement('header');
-const applicationMain = createElement('main');
+const applicationHeader = createElement('header', false, { 'aria-busy': 'true' });
+const applicationMain = createElement('main', false, { 'aria-busy': 'true' });
 
 const formBlob = createElement('form', false, {
     'method': 'post'
@@ -129,10 +129,11 @@ const q = fromQuery(window.location.search);
 
 console.log(q);
 
-let pageChunkDefault = q.chunk ?? 20,
-    pagePartDefault = q.part ?? 1,
-    pageSortDefault = q.sort ?? null,
-    pageType = false;
+let currentChunk = q.chunk ?? 20,
+    currentPart = q.part ?? 1,
+    currentQuery = q.query ?? null,
+    currentSort = q.sort ?? null,
+    currentType = false;
 
 formFile.addEventListener('submit', function (e) {
     clearAlerts();
@@ -147,9 +148,9 @@ formFile.addEventListener('submit', function (e) {
                 deleteActivity(path, true);
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault,
-                    sort: pageSortDefault
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
                 }));
                 viewItems(pathParent, query, "", function () {
                     application.prepend(createAlert(r.description, 'success'));
@@ -188,9 +189,9 @@ formFolder.addEventListener('submit', function (e) {
                 deleteActivity(path, true);
                 deleteMark(path);
                 updateRoute(toPath(pathParent) + toQuery(query = {
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault,
-                    sort: pageSortDefault
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
                 }));
                 viewItems(pathParent, query, "", function () {
                     application.prepend(createAlert(r.description, 'success'));
@@ -257,9 +258,9 @@ formUser.addEventListener('submit', function (e) {
         let hash = "",
             path = '/lot/asset',
             query = {
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
             };
         updateBusyState(false, this);
         onEnter(path, query, hash, function () {
@@ -313,12 +314,13 @@ function createEditorMain(r) {
                     application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
                     return;
                 }
+                let $, content = r.data.content,
+                    mode = type;
                 formFile.elements.content.style.display = 'none';
-                formFile.elements.content.value = r.data.content;
-                let $, mode = type;
+                formFile.elements.content.value = content;
                 if (['less', 'scss'].includes(x)) {
                     mode = 'css';
-                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === content.slice(0, 4)) {
                     mode = {
                         base: 'txt' === x ? 'null' : 'markdown',
                         name: 'yaml-frontmatter'
@@ -357,7 +359,7 @@ function createEditorMain(r) {
                 application.prepend(createAlert(e + "", 'error'));
             });
         } else {
-            application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
+            viewErrorEditor(path, { _type: type }, hash);
         }
     // Folder
     } else {
@@ -377,139 +379,29 @@ function createElement(name, content, attributes) {
     return updateElement(document.createElement(name), content, attributes);
 }
 
-function createList(items) {
-    const hash = fromHash(window.location.hash);
-    const list = createElement('ul');
-    const path = fromPath(window.location.pathname);
-    const query = fromQuery(window.location.search);
-    items.forEach(v => {
-        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-            'href': /* v.is.blob ? hub + '/blob' + v.route : */toPath(v.route) + (v.is.folder ? toQuery({
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
-            }) : ""),
-            'title': '..' === v.name ? 'Go to ' + toParent(v.route) : (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
-        });
-        link.addEventListener('click', /* v.is.blob ? function (e) {
-            openBlob(this.href);
-            e.preventDefault();
-        } : */onClick);
-        const linkDelete = createElement('a', '🗑️', {
-            'href': toPath(v.route) + toHash('delete'),
-            'title': 'Delete ' + v.route
-        });
-        linkDelete.addEventListener('click', function (e) {
-            let pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7);
-            loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
-                if (200 === r.status) {
-                    deleteActivity(pathToDelete, true);
-                    deleteMark(pathToDelete);
-                    viewItems(path, query, hash, function () {
-                        // application.prepend(createAlert(r.description, 'success'));
-                    });
-                }
-            }).catch(e => {
-                application.prepend(createAlert(e + "", 'error'));
-            });
-            e.preventDefault();
-        });
-        const linkEdit = createElement('a', '📝', {
-            'href': toPath(v.route) + toHash('patch'),
-            'title': 'Edit ' + v.route
-        });
-        linkEdit.addEventListener('click', function (e) {
-            let route = fromPath(this.getAttribute('href'));
-            updateRoute(toPath(route));
-            viewItem(route.split('#').shift(), {}, 'patch');
-            e.preventDefault();
-        });
-        const linkOpen = createElement('a', '🔍', {
-            'href': link.href,
-            'title': 'Open ' + v.route
-        });
-        linkOpen.addEventListener('click', function (e) {
-            link.click();
-            e.preventDefault();
-        });
-        const linkView = createElement('a', '👁', {
-            'href': hub + '/blob' + v.route,
-            'title': 'View ' + v.route
-        });
-        linkView.addEventListener('click', v.is.blob ? function (e) {
-            openBlob(this.href);
-            e.preventDefault();
-        } : function (e) {
-            link.click();
-            e.preventDefault();
-        });
-        const links = createElement('span', v.is.folder ? linkOpen : linkView, {
-            'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
-        });
-        if ('..' !== v.name) {
-            links.append(linkEdit, linkDelete);
-        } else {
-            links.append(v.route.slice(1).includes('/') ? linkEdit : createElement('span', linkEdit.textContent, {
-                'aria-disabled': 'true'
-            }), createElement('span', linkDelete.textContent, {
-                'aria-disabled': 'true'
-            }));
-        }
-        if (!sizes[v.route]) {
-            sizes[v.route] = createElement('span', v.size ?? '…', {
-                'role': 'status'
-            });
-            ((size, node, route) => {
-                if (size) {
-                    return;
-                }
-                loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abort.signal }).then(r => {
-                    if (200 === r.status) {
-                        node.innerHTML = r.data.size;
-                    }
-                }).catch(e => {
-                    delete sizes[route];
-                });
-            })(v.size, sizes[v.route], v.route);
-        }
-        list.append(createElement('li', [
-            v.is.file ? '📄' : '📁',
-            link,
-            sizes[v.route],
-            links
-        ], {
-            'aria-selected': mark[v.route] ? 'true' : false
-        }));
-    });
-    return list;
-}
-
 function createListMain(r) {
-    let {children, has, parent, query, route, total} = r.data;
+    let {data, query} = r,
+        {children, has, parent, route, total} = data;
     updateTitle('Application · Folder');
     if (parent) {
         parent.name = '..';
         children.unshift(parent); // Add “parent” link on top of the file and folder list
     }
-    // Special case for the file and folder list view, update activity log after activity list is built so that
-    // current location will not be visible as the first item on the list until the user moves to another activity
-    updateActivity(route, r.data);
+    updateActivity(route, data);
     updateElement(applicationMain, [
         createElement('h3', [
             '📂 ',
             createTraces('.' + route)
         ]),
-        createList(children),
+        createListOfMain(children),
         has.next || has.prev ? createElement('nav', [
             createPager(query.part, total, query.chunk, 2, function (part, current, disabled) {
-                if (current || disabled) {
-                    this.addEventListener('click', e => e.preventDefault());
-                } else {
-                    this.addEventListener('click', onClick);
-                }
+                this.addEventListener('click', current || disabled ? (e => e.preventDefault()) : onClick);
                 this.href = toPath(route) + toQuery({
-                    chunk: query.chunk,
-                    part: part
+                    chunk: query.chunk ?? currentChunk,
+                    part: part,
+                    query: query.query ?? currentQuery,
+                    sort: query.sort ?? currentSort
                 });
             }, 'First', 'Previous', 'Next', 'Last')
         ], {
@@ -527,18 +419,121 @@ function createListOfActivity() {
     const current = fromPath(window.location.pathname);
     const list = createElement('ul');
     activity.forEach(v => {
-        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-            'aria-current': current === v.route ? 'page' : false,
-            'href': v.is.blob ? hub + '/blob' + v.route : toPath(v.route) + (v.is.folder ? toQuery({
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
+        let {is, name, route, x} = v;
+        const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
+            'aria-current': current === route ? 'page' : false,
+            'href': is.blob ? hub + '/blob' + route : toPath(route) + (is.folder ? toQuery({
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
             }) : ""),
-            'title': (v.is.blob || v.is.folder ? 'Open' : 'View') + ' ' + v.route
+            'title': (is.folder ? 'Open' : 'View') + ' ' + route
         });
         link.addEventListener('click', onClick);
-        list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
-            'aria-selected': mark[v.route] ? 'true' : false
+        list.append(createElement('li', [is.file ? '📄' : '📁', link], {
+            'aria-selected': mark[route] ? 'true' : false
+        }));
+    });
+    return list;
+}
+
+function createListOfMain(items) {
+    const list = createElement('ul');
+    items.forEach(v => {
+        let {is, name, route, size, x} = v;
+        const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
+            'href': toPath(route) + (is.folder ? toQuery({
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
+            }) : ""),
+            'title': '..' === name ? 'Go to ' + toParent(route) : (is.folder ? 'Open' : 'View') + ' ' + route
+        });
+        link.addEventListener('click', onClick);
+        const linkDelete = createElement('a', '🗑️', {
+            'href': toPath(route) + toHash('delete'),
+            'title': 'Delete ' + route
+        });
+        linkDelete.addEventListener('click', function (e) {
+            let hash = fromHash(window.location.hash),
+                path = fromPath(window.location.pathname),
+                pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7),
+                query = fromQuery(window.location.search);
+            loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
+                if (200 !== r.status) {
+                    return viewError(path, { _description: r.status + ': ' + r.description }, hash);
+                }
+                deleteActivity(pathToDelete, true);
+                deleteMark(pathToDelete);
+                viewItems(path, query, hash, function () {
+                    // application.prepend(createAlert(r.description, 'success'));
+                });
+            }).catch(e => {
+                viewError(path, { _description: e + "" }, hash);
+            });
+            e.preventDefault();
+        });
+        const linkEdit = createElement('a', '📝', {
+            'href': toPath(route) + toHash('patch'),
+            'title': 'Edit ' + route
+        });
+        linkEdit.addEventListener('click', function (e) {
+            let pathToEdit = fromPath(this.getAttribute('href'));
+            updateRoute(toPath(pathToEdit));
+            pathToEdit = pathToEdit.slice(0, -6);
+            viewItem(pathToEdit, {}, 'patch');
+            e.preventDefault();
+        });
+        const linkOpen = createElement('a', '🔍', {
+            'href': link.href,
+            'title': 'Open ' + route
+        });
+        linkOpen.addEventListener('click', function (e) {
+            link.click();
+            e.preventDefault();
+        });
+        const linkView = createElement('a', '👁', {
+            'href': hub + '/blob' + route,
+            'title': 'View ' + route
+        });
+        linkView.addEventListener('click', is.blob ? function (e) {
+            openBlob(this.href);
+            e.preventDefault();
+        } : function (e) {
+            link.click();
+            e.preventDefault();
+        });
+        const links = createElement('span', is.folder ? linkOpen : linkView, {
+            'style': 'display:flex;gap:0.5em;justify-content:end;min-width:5em;'
+        });
+        if ('..' !== name) {
+            links.append(linkEdit, linkDelete);
+        } else {
+            links.append(route.slice(1).includes('/') ? linkEdit : createElement('span', linkEdit.textContent, {
+                'aria-disabled': 'true'
+            }), createElement('span', linkDelete.textContent, {
+                'aria-disabled': 'true'
+            }));
+        }
+        if (!sizes[route]) {
+            sizes[route] = createElement('span', size ?? '…', {
+                'role': 'status'
+            });
+            ((size, node, route) => {
+                !size && loadJSON(hub + '/size' + route, 'GET', {}, "", { signal: abort.signal }).then(r => {
+                    200 === r.status && (node.innerHTML = r.data.size);
+                }).catch(e => {
+                    delete sizes[route];
+                });
+            })(size, sizes[route], route);
+        }
+        list.append(createElement('li', [
+            is.file ? '📄' : '📁',
+            link,
+            sizes[route],
+            links
+        ], {
+            'aria-selected': mark[route] ? 'true' : false
         }));
     });
     return list;
@@ -553,12 +548,13 @@ function createListOfWork(items, patch) {
     const current = fromPath(window.location.pathname);
     const list = createElement('ul');
     items.forEach(v => {
-        const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
-            'aria-current': current === v.route ? 'page' : false,
-            'data-is-text': v.is.text ? 'true' : false,
-            'data-type': v.type ?? 'folder',
-            'href': toPath(v.route) + (patch ? toHash('patch') : ""),
-            'title': (patch ? 'Edit' : 'View') + ' ' + v.route
+        let {is, name, route, type, x} = v;
+        const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
+            'aria-current': current === route ? 'page' : false,
+            'data-is-text': is.text ? 'true' : false,
+            'data-type': type ?? 'folder',
+            'href': toPath(route) + (patch ? toHash('patch') : ""),
+            'title': (patch ? 'Edit' : 'View') + ' ' + route
         });
         link.addEventListener('click', function (e) {
             list.querySelectorAll('li>a').forEach(v => updateElement(v, false, {
@@ -579,20 +575,13 @@ function createListOfWork(items, patch) {
             if (patch) {
                 if (this.getAttribute('data-is-text')) {
                     loadJSON(hub + '/content' + route).then(r => {
-                        if (400 === r.status) {
-                            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-                            updateTitle('Application · Bad Request');
-                            return;
+                        if ([400, 415].includes(r.status)) {
+                            return viewError(route, { _description: r.status + ': ' + r.description });
                         }
                         // TODO: Handle stale token
                         if (401 === r.status) {
                             localStorage.removeItem('hub');
                             updateRoute(toPath('/enter')), view(onStaleAfter);
-                            return;
-                        }
-                        if (415 === r.status) {
-                            application.prepend(createAlert(r.status + ': ' + r.description, 'error', 1000));
-                            updateTitle('Application · Bad Request');
                             return;
                         }
                         Object.assign(r.data, {
@@ -609,23 +598,17 @@ function createListOfWork(items, patch) {
                         updateActivity(route, r.data);
                         updateEditorMain(r);
                     }).catch(e => {
-                        application.prepend(createAlert(e + "", 'error'));
+                        viewError(route, { _description: e + "" });
                     }).finally(() => {
                         updateBusyState(false, applicationMain);
                     });
                 } else {
-                    application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
-                    updateBusyState(false, applicationMain);
-                    updateElement(applicationMain, null);
-                    updateTitle('Application · Forbidden');
+                    viewErrorEditor(route, { _type: type });
                 }
             } else {
                 loadJSON(hub + '/at' + route).then(r => {
-                    updateBusyState(false, applicationMain);
-                    if (400 === r.status) {
-                        application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-                        updateTitle('Application · Bad Request');
-                        return;
+                    if ([400, 415].includes(r.status)) {
+                        return viewError(route, { _description: r.status + ': ' + r.description });
                     }
                     // TODO: Handle stale token
                     if (401 === r.status) {
@@ -633,19 +616,18 @@ function createListOfWork(items, patch) {
                         updateRoute(toPath('/enter')), view(onStaleAfter);
                         return;
                     }
-                    if (415 === r.status) {
-                        application.prepend(createAlert(r.status + ': ' + r.description, 'error', 1000));
-                        updateTitle('Application · Bad Request');
-                        return;
-                    }
                     updateActivity(route, r.data);
                     updateViewMain(r);
+                }).catch(e => {
+                    viewError(route, { _description: e + "" });
+                }).finally(() => {
+                    updateBusyState(false, applicationMain);
                 });
             }
             e.preventDefault();
         });
-        list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
-            'aria-selected': mark[v.route] ? 'true' : false
+        list.append(createElement('li', [is.file ? '📄' : '📁', link], {
+            'aria-selected': mark[route] ? 'true' : false
         }));
     });
     return list;
@@ -726,9 +708,9 @@ function createTraces(path) {
             const a = createElement('a', v, {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
                 'href': toPath(trace.slice(1)) + (tracesMax === k + 1 ? "" : toQuery({
-                    chunk: pageChunkDefault,
-                    part: pagePartDefault,
-                    sort: pageSortDefault
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
                 }))
             });
             a.addEventListener('click', onClick);
@@ -753,13 +735,13 @@ function createViewMain(r) {
         if (is.text) {
             loadJSON(hub + '/content' + route).then(r => {
                 if (200 !== r.status) {
-                    application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-                    return;
+                    return viewError(route, { _description: r.status + ': ' + r.description });
                 }
-                let mode = type;
+                let content = r.data.content,
+                    mode = type;
                 if (['less', 'scss'].includes(x)) {
                     mode = 'css';
-                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === content.slice(0, 4)) {
                     mode = {
                         base: 'txt' === x ? 'null' : 'markdown',
                         name: 'yaml-frontmatter'
@@ -772,30 +754,65 @@ function createViewMain(r) {
                     'tabindex': 0
                 }));
                 loadCodeMirror5().then(CodeMirror => {
-                    CodeMirror.runMode(r.data.content, mode, code);
+                    CodeMirror.runMode(content, mode, code);
                     code.focus();
                 }).catch(e => {
-                    application.prepend(createAlert(e + "", 'error'));
+                    viewError(route, { _description: e + "" });
                 });
                 updateElement(display, codeParent);
             });
         } else if ('audio/' === type.slice(0, 6)) {
             const audio = createElement('audio', false, {
-                'controls': true,
-                'src': toParent(hub) + route // TODO
+                'controls': true
             });
             updateElement(display, audio);
+            f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
+                let revoke = function () {
+                        URL.revokeObjectURL(v);
+                        audio.removeEventListener('error', revoke);
+                        audio.removeEventListener('loadeddata', revoke);
+                    },
+                    v = URL.createObjectURL(blob);
+                audio.addEventListener('error', revoke, { once: true });
+                audio.addEventListener('loadeddata', revoke, { once: true });
+                audio.src = v;
+            });
+            audio.focus();
         } else if ('image/' === type.slice(0, 6)) {
-            updateElement(display, createElement('img', false, {
+            const image = createElement('img', false, {
                 'alt': "",
-                'src': toParent(hub) + route // TODO
-            }));
+                'tabindex': 0
+            });
+            updateElement(display, image);
+            f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
+                let revoke = function () {
+                        URL.revokeObjectURL(v);
+                        image.removeEventListener('error', revoke);
+                        image.removeEventListener('load', revoke);
+                    },
+                    v = URL.createObjectURL(blob);
+                image.addEventListener('error', revoke, { once: true });
+                image.addEventListener('load', revoke, { once: true });
+                image.src = v;
+            });
+            image.focus();
         } else if ('video/' === type.slice(0, 6)) {
             const video = createElement('video', false, {
-                'controls': true,
-                'src': toParent(hub) + route // TODO
+                'controls': true
             });
             updateElement(display, video);
+            f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
+                let revoke = function () {
+                        URL.revokeObjectURL(v);
+                        video.removeEventListener('error', revoke);
+                        video.removeEventListener('loadeddata', revoke);
+                    },
+                    v = URL.createObjectURL(blob);
+                video.addEventListener('error', revoke, { once: true });
+                video.addEventListener('loadeddata', revoke, { once: true });
+                video.src = v;
+            });
+            video.focus();
         } else {
             updateElement(display, createElement('pre', createElement('code', "")));
             display.firstChild.firstChild.textContent = JSON.stringify(r, null, 2);
@@ -1034,13 +1051,9 @@ function onEnter(path, query, hash, then) {
         e.preventDefault();
     });
     // Folder navigation select-box
-    const options = createElement('select', false, {
-        'aria-busy': 'true',
-        'disabled': true
-    });
+    const options = createElement('select');
     const value = path.split('/')[2] || "";
     let selected;
-    updateBusyState(true, options);
     loadFolders().then(items => {
         items.map(v => {
             let icon = '📁',
@@ -1095,17 +1108,15 @@ function onEnter(path, query, hash, then) {
             ]);
             options.value = "";
         }
-        options.disabled = false;
-        updateBusyState(false, options);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     });
     options.addEventListener('change', function (e) {
         let path = '/lot/' + this.value, query;
         updateRoute(toPath(path) + toQuery(query = {
-            chunk: pageChunkDefault,
-            part: pagePartDefault,
-            sort: pageSortDefault
+            chunk: currentChunk,
+            part: currentPart,
+            sort: currentSort
         }));
         if (this.options[this.selectedIndex].getAttribute('data-home')) {
             // Refresh option(s)
@@ -1218,7 +1229,7 @@ function toValue(v) {
 function updateActivity(route, r) {
     deleteActivity(route);
     activity.unshift(r);
-    if (activity.length > pageChunkDefault - 1) {
+    if (activity.length > currentChunk - 1) {
         activity.pop();
     }
 }
@@ -1278,7 +1289,7 @@ function updateEditorMain(r) {
                 formFile.elements.content.focus();
             }
         } else {
-            application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
+            viewErrorEditor(path, { _type: type }, hash);
         }
     // Folder
     } else {
@@ -1354,7 +1365,7 @@ function viewEnter(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    pageType = false;
+    currentType = false;
     onExit(path, query, hash, function () {
         application.append(formUser);
         then && then.call(application);
@@ -1362,12 +1373,34 @@ function viewEnter(path, query, hash, then) {
     });
 }
 
+function viewError(path, query, hash, then) {
+    abort.abort();
+    abort = new AbortController;
+    clearAlerts();
+    currentType = false;
+    updateBusyState(false, applicationAside);
+    updateBusyState(false, applicationHeader);
+    updateBusyState(false, applicationMain);
+    updateTitle('Application · Error');
+    let description = query._description || 'Unknown error.';
+    delete query._description;
+    updateElement(application, createAlert(description, 'error'));
+    then && then.call(application);
+}
+
+function viewErrorEditor(path, query, hash, then) {
+    let type = query._type ?? 'folder';
+    delete query._type;
+    query._description = 'No editor is available for the <code>' + type + '</code> resource type.';
+    viewError(path, query, hash, then);
+}
+
 function viewItem(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
+    currentType = 'file';
     deleteMark(path);
-    pageType = 'file';
     updateBusyState(true, applicationAside);
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
@@ -1379,11 +1412,7 @@ function viewItem(path, query, hash, then) {
             if (r.data.is.text) {
                 return viewItemFileEditorText(path, query, hash, then);
             }
-            application.prepend(createAlert('No editor is available for the <code>' + r.data.type + '</code> resource type.', 'error'));
-            updateBusyState(false, applicationAside);
-            updateBusyState(false, applicationMain);
-            updateTitle('Application · Forbidden');
-            return;
+            return viewErrorEditor(path, { _type: r.data.type }, hash, then);
         }
         let type = r.data?.type || "";
         loadJSON(hub + '/at' + toParent(path) + toQuery({
@@ -1401,6 +1430,7 @@ function viewItem(path, query, hash, then) {
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
         });
+        updateBusyState(false, applicationHeader); // Because `applicationHeader` is set to busy on user enter
         updateBusyState(false, applicationMain);
         if (400 === r.status) {
             application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
@@ -1440,10 +1470,8 @@ function viewItemFileEditorText(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
+    currentType = 'file';
     deleteMark(path);
-    pageType = 'file';
-    updateBusyState(true, applicationAside);
-    updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
         loadJSON(hub + '/at' + toParent(path) + toQuery({
@@ -1461,6 +1489,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
         });
+        updateBusyState(false, applicationHeader); // Because `applicationHeader` is set to busy on user enter
         updateBusyState(false, applicationMain);
         if (400 === r.status) {
             application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
@@ -1505,10 +1534,8 @@ function viewItemFolderEditor(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
+    currentType = 'folder';
     deleteMark(path);
-    pageType = 'folder';
-    updateBusyState(true, applicationAside);
-    updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
         loadJSON(hub + '/at' + toParent(path) + toQuery({
@@ -1526,6 +1553,7 @@ function viewItemFolderEditor(path, query, hash, then) {
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
         });
+        updateBusyState(false, applicationHeader); // Because `applicationHeader` is set to busy on user enter
         updateBusyState(false, applicationMain);
         if (400 === r.status) {
             application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
@@ -1573,23 +1601,20 @@ function viewItems(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
+    currentType = 'folder';
     deleteMark(path);
-    pageType = 'folder';
-    updateBusyState(true, applicationAside);
-    updateBusyState(true, applicationMain);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path + toQuery({
-        chunk: query.chunk,
-        part: query.part,
-        query: query.query || null,
-        sort: query.sort || null
+        chunk: query.chunk ?? currentChunk,
+        part: query.part ?? currentPart,
+        query: query.query ?? currentQuery,
+        sort: query.sort ?? currentSort
     })).then(r => {
         updateBusyState(false, applicationAside);
+        updateBusyState(false, applicationHeader); // Because `applicationHeader` is set to busy on user enter
         updateBusyState(false, applicationMain);
-        if (400 === r.status) {
-            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-            updateTitle('Application · Bad Request');
-            return;
+        if ([400, 403, 404].includes(r.status)) {
+            return viewError(path, { _description: r.status + ': ' + r.description }, hash);
         }
         // TODO: Handle stale token
         if (401 === r.status) {
@@ -1597,27 +1622,13 @@ function viewItems(path, query, hash, then) {
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
-        if (403 === r.status) {
-            onExit(path, query, hash, function () {
-                application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-            });
-            updateTitle('Application · Forbidden');
-            return;
-        }
-        if (404 === r.status) {
-            onExit(path, query, hash, function () {
-                application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-            });
-            updateTitle('Application · Not Found');
-            return;
-        }
         updateElement(applicationAside, [
             createElement('h6', 'Activity'),
             createListOfActivity()
         ]);
-        createListMain(r);
+        createListMain(r); // Has to run after `createListOfActivity()` call
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error'));
+        viewError(path, { _description: e + "" }, hash);
     }).finally(() => {
         then && then.call(application);
     });
@@ -1700,9 +1711,9 @@ formFileNew.addEventListener('submit', function (e) {
             updateActivity(r.data.route, r.data);
             updateMark(r.data.route);
             viewItems(path, {
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
             });
             this.reset();
         } else {
@@ -1734,14 +1745,14 @@ formFolderNew.addEventListener('submit', function (e) {
                 updateMark(path + '/' + s);
             });
             updateRoute(toPath(path + '/' + route) + toQuery({
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
             }));
             viewItems(path + '/' + route, {
-                chunk: pageChunkDefault,
-                part: pagePartDefault,
-                sort: pageSortDefault
+                chunk: currentChunk,
+                part: currentPart,
+                sort: currentSort
             });
             this.reset();
         } else {
