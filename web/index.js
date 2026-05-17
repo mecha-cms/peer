@@ -398,10 +398,10 @@ function createListMain(r) {
             createPager(query.part, total, query.chunk, 2, function (part, current, disabled) {
                 this.addEventListener('click', current || disabled ? (e => e.preventDefault()) : onClick);
                 this.href = toPath(route) + toQuery({
-                    chunk: query.chunk ?? currentChunk,
+                    chunk: currentChunk,
                     part: part,
-                    query: query.query ?? currentQuery,
-                    sort: query.sort ?? currentSort
+                    query: currentQuery,
+                    sort: currentSort
                 });
             }, 'First', 'Previous', 'Next', 'Last')
         ], {
