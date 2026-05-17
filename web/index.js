@@ -216,6 +216,11 @@ formFolder.querySelectorAll('[type=submit]').forEach(v => {
     });
 });
 
+formSearch.addEventListener('submit', function (e) {
+    console.log(this.elements.query.value);
+    e.preventDefault();
+});
+
 formUser.addEventListener('submit', function (e) {
     clearAlerts();
     let key,
@@ -260,7 +265,7 @@ formUser.addEventListener('submit', function (e) {
         onEnter(path, query, hash, function () {
             viewItems(path, query, hash, onEnterAfter);
         });
-        updateRoute(toPath(path) + toQuery(query));
+        updateRoute(toPath(path) + toQuery(query) + toHash(hash));
     }).catch(e => {
         updateAlert(info, e + "", 'error');
     });
@@ -282,12 +287,101 @@ function createAlert(text, type, timeOut) {
     return element;
 }
 
+// Runs before `GET /hub/content/*`
+function createEditorMain(r) {
+    let {is, name, route, type, x} = r.data;
+    updateTitle('Application · ' + (is.file ? 'File' : 'Folder') + ' Editor');
+    // File
+    if (is.file) {
+        formFile.action = hub + '/at' + route;
+        formFile.elements.name.value = name + (x ? '.' + x : "");
+        updateElement(applicationMain, [
+            createElement('h3', [
+                '📄 ',
+                createTraces('.' + route)
+            ]),
+            formFile
+        ]);
+        if (is.text) {
+            loadJSON(hub + '/content' + route).then(r => {
+                // Already has `CodeMirror` instance
+                if (application.$) {
+                    Object.assign(r.data, { is, name, route, x });
+                    return updateEditorMain(r);
+                }
+                if (200 !== r.status) {
+                    application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+                    return;
+                }
+                formFile.elements.content.style.display = 'none';
+                formFile.elements.content.value = r.data.content;
+                let $, mode = type;
+                if (['less', 'scss'].includes(x)) {
+                    mode = 'css';
+                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                    mode = {
+                        base: 'txt' === x ? 'null' : 'markdown',
+                        name: 'yaml-frontmatter'
+                    };
+                } else if (['yaml', 'yml'].includes(x)) {
+                    mode = 'yaml';
+                }
+                loadCodeMirror5().then(CodeMirror => {
+                    $ = CodeMirror.fromTextArea(formFile.elements.content, {
+                        autoCloseBrackets: true,
+                        autofocus: true,
+                        lineNumbers: true,
+                        lineWrapping: false,
+                        mode,
+                        scrollbarStyle: 'simple',
+                        viewportMargin: Infinity
+                    });
+                    $.refresh();
+                    // If content is longer than the maximum height or width, move cursor to the start of the editor
+                    $.on('focus', function () {
+                        let pane = $.getScrollerElement(),
+                            maxRows = $.lineCount(),
+                            moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
+                        $.setCursor(moveToStart ? 0 : maxRows, 0);
+                        if (moveToStart) {
+                            $.scrollTo(0, 0);
+                        }
+                    });
+                    application.$ = $;
+                }).catch(e => {
+                    application.prepend(createAlert(e + "", 'error'));
+                    formFile.elements.content.style.display = "";
+                    formFile.elements.content.focus();
+                });
+            }).catch(e => {
+                application.prepend(createAlert(e + "", 'error'));
+            });
+        } else {
+            application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
+        }
+    // Folder
+    } else {
+        formFolder.action = hub + '/at' + route;
+        formFolder.elements.name.value = name;
+        updateElement(applicationMain, [
+            createElement('h3', [
+                '📁 ',
+                createTraces('.' + route)
+            ]),
+            formFolder
+        ]);
+    }
+}
+
 function createElement(name, content, attributes) {
     return updateElement(document.createElement(name), content, attributes);
 }
 
-function createList(items, path, query, hash) {
+function createList(items) {
+    const hash = fromHash(window.location.hash);
     const list = createElement('ul');
+    const path = fromPath(window.location.pathname);
+    const query = fromQuery(window.location.search);
     items.forEach(v => {
         const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
             'href': /* v.is.blob ? hub + '/blob' + v.route : */toPath(v.route) + (v.is.folder ? toQuery({
@@ -390,6 +484,40 @@ function createList(items, path, query, hash) {
     return list;
 }
 
+function createListMain(r) {
+    let {children, has, parent, query, route, total} = r.data;
+    updateTitle('Application · Folder');
+    if (parent) {
+        parent.name = '..';
+        children.unshift(parent); // Add “parent” link on top of the file and folder list
+    }
+    // Special case for the file and folder list view, update activity log after activity list is built so that
+    // current location will not be visible as the first item on the list until the user moves to another activity
+    updateActivity(route, r.data);
+    updateElement(applicationMain, [
+        createElement('h3', [
+            '📂 ',
+            createTraces('.' + route)
+        ]),
+        createList(children),
+        has.next || has.prev ? createElement('nav', [
+            createPager(query.part, total, query.chunk, 2, function (part, current, disabled) {
+                if (current || disabled) {
+                    this.addEventListener('click', e => e.preventDefault());
+                } else {
+                    this.addEventListener('click', onClick);
+                }
+                this.href = toPath(route) + toQuery({
+                    chunk: query.chunk,
+                    part: part
+                });
+            }, 'First', 'Previous', 'Next', 'Last')
+        ], {
+            'aria-label': 'Pagination'
+        }) : ""
+    ]);
+}
+
 function createListOfActivity() {
     if (!activity.length) {
         return createElement('p', 'None', {
@@ -427,6 +555,8 @@ function createListOfWork(items, patch) {
     items.forEach(v => {
         const link = createElement('a', v.name + (v.is.file && v.x ? '.' + v.x : ""), {
             'aria-current': current === v.route ? 'page' : false,
+            'data-is-text': v.is.text ? 'true' : false,
+            'data-type': v.type ?? 'folder',
             'href': toPath(v.route) + (patch ? toHash('patch') : ""),
             'title': (patch ? 'Edit' : 'View') + ' ' + v.route
         });
@@ -440,80 +570,78 @@ function createListOfWork(items, patch) {
             updateBusyState(true, applicationMain);
             updateRoute(this.getAttribute('href'));
             updateTitle('Loading…');
-            let base, path = fromPath(this.getAttribute('href'));
+            let base, route = fromPath(this.getAttribute('href')),
+                type = this.getAttribute('data-type');
             if (patch) {
-                path = path.slice(0, -6);
+                route = route.slice(0, -6);
             }
-            base = decodeURIComponent(toBase(path));
-            loadJSON(hub + '/content' + path).then(r => {
-                updateBusyState(false, applicationMain);
-                if (400 === r.status) {
-                    application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
-                    updateTitle('Application · Bad Request');
-                    return;
-                }
-                // TODO: Handle stale token
-                if (401 === r.status) {
-                    localStorage.removeItem('hub');
-                    updateRoute(toPath('/enter')), view(onStaleAfter);
-                    return;
-                }
-                if (200 === r.status) {
-                    updateActivity(path, Object.assign({
-                        is: {
-                            blob: false,
-                            file: true,
-                            folder: false
-                        },
-                        name: base.split('.').slice(0, -1).join('.'),
-                        route: path,
-                        x: base.split('.').pop()
-                    }, r.data));
-                    updateElement(applicationMain.querySelector('h3'), [
-                        '📄 ',
-                        createTraces('.' + path)
-                    ]);
-                    updateTitle('Application · File ' + (patch ? 'Editor' : 'Viewer'));
-                    let mode = r.data.type,
-                        x = base.split('.').pop();
-                    if (['less', 'scss'].includes(x)) {
-                        mode = 'css';
-                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
-                        mode = {
-                            base: 'txt' === x ? 'null' : 'markdown',
-                            name: 'yaml-frontmatter'
-                        };
-                    } else if (['yaml', 'yml'].includes(x)) {
-                        mode = 'yaml';
-                    }
-                    if (patch) {
-                        formFile.action = hub + '/at' + path;
-                        if (formFile.$) {
-                            formFile.$.setOption('mode', mode);
-                            formFile.$.setValue(r.data.content);
-                            formFile.$.save();
-                            formFile.$.refresh();
-                            formFile.$.focus();
-                        } else {
-                            formFile.elements.content.value = r.data.content;
-                            formFile.elements.content.focus();
+            base = decodeURIComponent(toBase(route));
+            if (patch) {
+                if (this.getAttribute('data-is-text')) {
+                    loadJSON(hub + '/content' + route).then(r => {
+                        if (400 === r.status) {
+                            application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+                            updateTitle('Application · Bad Request');
+                            return;
                         }
-                        formFile.elements.name.value = base;
-                    } else {
-                        const content = applicationMain.querySelector('pre>code');
-                        content.classList.add('cm-s', 'cm-s-default');
-                        content.textContent = r.data.content;
-                        loadCodeMirror5().then(CodeMirror => {
-                            CodeMirror.runMode(r.data.content, mode, content);
-                            content.focus();
-                        }).catch(e => {
-                            application.prepend(createAlert(e + "", 'error'));
+                        // TODO: Handle stale token
+                        if (401 === r.status) {
+                            localStorage.removeItem('hub');
+                            updateRoute(toPath('/enter')), view(onStaleAfter);
+                            return;
+                        }
+                        if (415 === r.status) {
+                            application.prepend(createAlert(r.status + ': ' + r.description, 'error', 1000));
+                            updateTitle('Application · Bad Request');
+                            return;
+                        }
+                        Object.assign(r.data, {
+                            is: {
+                                blob: false,
+                                file: true,
+                                folder: false,
+                                text: true
+                            },
+                            name: base.split('.').slice(0, -1).join('.'),
+                            route,
+                            x: base.split('.').pop()
                         });
+                        updateActivity(route, r.data);
+                        updateEditorMain(r);
+                    }).catch(e => {
+                        application.prepend(createAlert(e + "", 'error'));
+                    }).finally(() => {
+                        updateBusyState(false, applicationMain);
+                    });
+                } else {
+                    application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
+                    updateBusyState(false, applicationMain);
+                    updateElement(applicationMain, null);
+                    updateTitle('Application · Forbidden');
+                }
+            } else {
+                loadJSON(hub + '/at' + route).then(r => {
+                    updateBusyState(false, applicationMain);
+                    if (400 === r.status) {
+                        application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+                        updateTitle('Application · Bad Request');
+                        return;
                     }
-                } else {}
-            }).catch(e => {
-                application.prepend(createAlert(e + "", 'error'));
-            });
+                    // TODO: Handle stale token
+                    if (401 === r.status) {
+                        localStorage.removeItem('hub');
+                        updateRoute(toPath('/enter')), view(onStaleAfter);
+                        return;
+                    }
+                    if (415 === r.status) {
+                        application.prepend(createAlert(r.status + ': ' + r.description, 'error', 1000));
+                        updateTitle('Application · Bad Request');
+                        return;
+                    }
+                    updateActivity(route, r.data);
+                    updateViewMain(r);
+                });
+            }
             e.preventDefault();
         });
         list.append(createElement('li', [v.is.file ? '📄' : '📁', link], {
@@ -610,6 +738,73 @@ function createTraces(path) {
     return span;
 }
 
+function createViewMain(r) {
+    let {is, route, type, x} = r.data,
+        display = createElement('div');
+    updateElement(applicationMain, [
+        createElement('h3', [
+            '📄 ',
+            createTraces('.' + route)
+        ]),
+        display
+    ]);
+    updateTitle('Application · ' + (is.file ? 'File' : 'Folder') + ' Viewer');
+    if (is.file) {
+        if (is.text) {
+            loadJSON(hub + '/content' + route).then(r => {
+                if (200 !== r.status) {
+                    application.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+                    return;
+                }
+                let mode = type;
+                if (['less', 'scss'].includes(x)) {
+                    mode = 'css';
+                } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
+                    mode = {
+                        base: 'txt' === x ? 'null' : 'markdown',
+                        name: 'yaml-frontmatter'
+                    };
+                } else if (['yaml', 'yml'].includes(x)) {
+                    mode = 'yaml';
+                }
+                let code, codeParent = createElement('pre', code = createElement('code', "", {
+                    'class': 'cm-s cm-s-default',
+                    'tabindex': 0
+                }));
+                loadCodeMirror5().then(CodeMirror => {
+                    CodeMirror.runMode(r.data.content, mode, code);
+                    code.focus();
+                }).catch(e => {
+                    application.prepend(createAlert(e + "", 'error'));
+                });
+                updateElement(display, codeParent);
+            });
+        } else if ('audio/' === type.slice(0, 6)) {
+            const audio = createElement('audio', false, {
+                'controls': true,
+                'src': toParent(hub) + route // TODO
+            });
+            updateElement(display, audio);
+        } else if ('image/' === type.slice(0, 6)) {
+            updateElement(display, createElement('img', false, {
+                'alt': "",
+                'src': toParent(hub) + route // TODO
+            }));
+        } else if ('video/' === type.slice(0, 6)) {
+            const video = createElement('video', false, {
+                'controls': true,
+                'src': toParent(hub) + route // TODO
+            });
+            updateElement(display, video);
+        } else {
+            updateElement(display, createElement('pre', createElement('code', "")));
+            display.firstChild.firstChild.textContent = JSON.stringify(r, null, 2);
+        }
+    } else {
+        application.prepend(createAlert('No viewer is available for the <code>' + (type ?? 'folder') + '</code> resource type.', 'error'));
+    }
+}
+
 function deleteActivity(route, deep) {
     for (let i = activity.length - 1; i >= 0; --i) {
         const current = activity[i].route;
@@ -635,12 +830,16 @@ function fromQuery(query, parseValue = true, defaultValue = true) {
     if ('?' === query[0]) {
         query = query.slice(1);
     }
+    if ("" === query) {
+        return {};
+    }
     let r = {};
     query.split('&').forEach(q => {
         let current = r,
             i = q.indexOf('='),
             key = "", keys = [],
             [k, v] = -1 === i ? [q] : [q.slice(0, i), q.slice(i + 1)];
+        k = decodeURIComponent(k);
         if ('undefined' === typeof v) {
             v = defaultValue;
         } else {
@@ -798,36 +997,6 @@ function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
         console.groupEnd();
         return r;
     }));
-}
-
-function loadVLiteJS() {
-    if (window.Vlitejs) {
-        return Promise.resolve(window.Vlitejs);
-    }
-    const info = createAlert('Loading VLiteJS library…', 'info');
-    application.prepend(info);
-    return Promise.all([
-        loadCSS('https://cdn.jsdelivr.net/npm/vlitejs@6/dist/vlite.css'),
-        new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.type = 'module';
-            script.textContent = `
-                import Vlitejs from 'https://cdn.jsdelivr.net/npm/vlitejs@6/+esm';
-                window.Vlitejs = Vlitejs;
-                window.dispatchEvent(new Event('vlitejs:loaded'));
-            `;
-            window.addEventListener('vlitejs:loaded', () => {
-                resolve(window.Vlitejs);
-            }, { once: true });
-            script.onerror = reject;
-            document.head.append(script);
-        })
-    ]).then(() => {
-        info.remove();
-        return window.Vlitejs;
-    }).catch(e => {
-        updateAlert(info, e + '', 'error');
-    });
 }
 
 function onBeforeUnload() {
@@ -1011,7 +1180,7 @@ function toBase(path) {
 }
 
 function toHash(hash) {
-    return '#' + hash;
+    return hash ? '#' + hash : "";
 }
 
 function toParent(path) {
@@ -1023,23 +1192,23 @@ function toPath(path) {
     return sub + path;
 }
 
-function toQuery(object, path = "", list = []) {
-    if (Array.isArray(object)) {
+function toQuery(object, path = "", r = []) {
+    if (false === object || null === object) {} else if (true === object) {
+        r.push(path);
+    } else if (Array.isArray(object)) {
         for (let i = 0, j = object.length; i < j; ++i) {
             if (i in object) {
-                toQuery(object[i], path + '[]', list);
+                toQuery(object[i], path + encodeURIComponent('[]'), r);
             }
         }
-    } else if (object && 'object' === typeof object) {
-        for (const k in object) {
-            toQuery(object[k], path ? path + '[' + encodeURIComponent(k) + ']' : encodeURIComponent(k), list);
+    } else if ('object' === typeof object) {
+        for (const k of Object.keys(object)) {
+            toQuery(object[k], path ? path + encodeURIComponent('[' + k + ']') : encodeURIComponent(k), r);
         }
-    } else if (true === object) {
-        list.push(path);
-    } else if (false !== object && null !== object) {
-        list.push(path + '=' + encodeURIComponent(fromValue(object)));
+    } else {
+        r.push(path + '=' + encodeURIComponent(fromValue(object)));
     }
-    return list.length ? '?' + list.join('&') : null;
+    return r.length ? '?' + r.join('&') : null;
 }
 
 function toValue(v) {
@@ -1069,6 +1238,60 @@ function updateBusyState(busy, node) {
     updateElement(node || document.documentElement, false, {
         'aria-busy': busy ? 'true' : false
     })
+}
+
+// Runs after `GET /hub/content/*`
+function updateEditorMain(r) {
+    let {content, is, name, route, type, x} = r.data;
+    updateTitle('Application · ' + (is.file ? 'File' : 'Folder') + ' Editor');
+    // File
+    if (is.file) {
+        formFile.action = hub + '/at' + route;
+        formFile.elements.name.value = name + (x ? '.' + x : "");
+        updateElement(applicationMain, [
+            createElement('h3', [
+                '📄 ',
+                createTraces('.' + route)
+            ]),
+            formFile
+        ]);
+        if (is.text) {
+            formFile.elements.content.value = content;
+            let $, mode = type;
+            if (['less', 'scss'].includes(x)) {
+                mode = 'css';
+            } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === content.slice(0, 4)) {
+                mode = {
+                    base: 'txt' === x ? 'null' : 'markdown',
+                    name: 'yaml-frontmatter'
+                };
+            } else if (['yaml', 'yml'].includes(x)) {
+                mode = 'yaml';
+            }
+            if ($ = application.$) {
+                $.setOption('mode', mode);
+                $.setValue(content);
+                $.save();
+                $.refresh();
+                $.focus();
+            } else {
+                formFile.elements.content.focus();
+            }
+        } else {
+            application.prepend(createAlert('No editor is available for the <code>' + type + '</code> resource type.', 'error'));
+        }
+    // Folder
+    } else {
+        formFolder.action = hub + '/at' + route;
+        formFolder.elements.name.value = name;
+        updateElement(applicationMain, [
+            createElement('h3', [
+                '📁 ',
+                createTraces('.' + route)
+            ]),
+            formFolder
+        ]);
+    }
 }
 
 function updateElement(element, content, attributes) {
@@ -1103,6 +1326,10 @@ function updateRoute(route) {
 
 function updateTitle(text, busy) {
     document.title = text;
+}
+
+function updateViewMain(r) {
+    return createViewMain(r);
 }
 
 function view(then) {
@@ -1169,7 +1396,7 @@ function viewItem(path, query, hash, then) {
             }
             updateElement(applicationAside, [
                 createElement('h6', 'Work'),
-                createListOfWork(r.data.children.filter(v => (type || "").split('/').shift() === (v.type || "").split('/').shift()))
+                createListOfWork(r.data.children)
             ]);
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
@@ -1200,61 +1427,8 @@ function viewItem(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        const content = createElement('code', 'Loading content…', {
-            'tabindex': 0
-        });
         updateActivity(r.data.route, r.data);
-        updateElement(applicationMain, [
-            createElement('h3', [
-                '📄 ',
-                createTraces('.' + path)
-            ]),
-            createElement('pre', content)
-        ]);
-        updateTitle('Application · File Viewer');
-        if (r.data.is.text) {
-            loadJSON(hub + '/content' + path).then(r => {
-                if (200 === r.status) {
-                    let mode = r.data.type,
-                        x = path.split('.').pop();
-                    if (['less', 'scss'].includes(x)) {
-                        mode = 'css';
-                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
-                        mode = {
-                            base: 'txt' === x ? 'null' : 'markdown',
-                            name: 'yaml-frontmatter'
-                        };
-                    } else if (['yaml', 'yml'].includes(x)) {
-                        mode = 'yaml';
-                    }
-                    content.classList.add('cm-s', 'cm-s-default');
-                    content.textContent = r.data.content;
-                    loadCodeMirror5().then(CodeMirror => {
-                        CodeMirror.runMode(r.data.content, mode, content);
-                        content.focus();
-                    }).catch(e => {
-                        application.prepend(createAlert(e + "", 'error'));
-                    });
-                }
-            });
-        } else {
-            if ('audio/' === r.data.type.slice(0, 6)) {
-                console.log('load audio player');
-            } else if ('image/' === r.data.type.slice(0, 6)) {
-                console.log('load image viewer');
-            } else if ('video/' === r.data.type.slice(0, 6)) {
-                content.style.display = 'none';
-                const video = createElement('video', false, {
-                    'src': toParent(hub) + r.data.route
-                });
-                content.before(video);
-                loadVLiteJS().then(Vlitejs => {
-                    new Vlitejs(video);
-                }).catch(e => {});
-                return;
-            }
-            content.textContent = JSON.stringify(r, null, 2);
-        }
+        createViewMain(r);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     }).finally(() => {
@@ -1282,7 +1456,7 @@ function viewItemFileEditorText(path, query, hash, then) {
             }
             updateElement(applicationAside, [
                 createElement('h6', 'Work'),
-                createListOfWork(r.data.children.filter(v => v.is.text), true)
+                createListOfWork(r.data.children, true)
             ]);
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
@@ -1313,84 +1487,13 @@ function viewItemFileEditorText(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        formFile.action = hub + '/at' + path;
-        formFile.elements.content.parentNode.style.display = r.data.is.text ? "" : 'none';
-        formFile.elements.name.value = r.data.name + (r.data.x ? '.' + r.data.x : "");
-        updateActivity(r.data.route, r.data);
-        updateElement(applicationMain, [
-            createElement('h3', [
-                '📄 ',
-                createTraces('.' + path)
-            ]),
-            formFile
-        ]);
-        updateTitle('Application · File Editor');
-        if (r.data.is.text) {
-            formFile.elements.content.style.display = 'none';
-            loadJSON(hub + '/content' + path).then(r => {
-                if (200 === r.status) {
-                    updateActivity(path, Object.assign({
-                        is: {
-                            blob: false,
-                            file: true,
-                            folder: false
-                        },
-                        name: toBase(path).split('.').slice(0, -1).join('.'),
-                        route: path,
-                        x: path.split('.').pop()
-                    }, r.data));
-                    let mode = r.data.type,
-                        x = path.split('.').pop();
-                    if (['less', 'scss'].includes(x)) {
-                        mode = 'css';
-                    } else if (['markdown', 'md', 'txt'].includes(x) && '---\n' === r.data.content.slice(0, 4)) {
-                        mode = {
-                            base: 'txt' === x ? 'null' : 'markdown',
-                            name: 'yaml-frontmatter'
-                        };
-                    } else if (['yaml', 'yml'].includes(x)) {
-                        mode = 'yaml';
-                    }
-                    formFile.elements.content.value = r.data.content;
-                    if (formFile.$) {
-                        formFile.$.setOption('mode', mode);
-                        formFile.$.setValue(formFile.elements.content.value);
-                        formFile.$.save();
-                        formFile.$.refresh();
-                        formFile.$.focus();
-                    } else {
-                        loadCodeMirror5().then(CodeMirror => {
-                            formFile.$ = CodeMirror.fromTextArea(formFile.elements.content, {
-                                autoCloseBrackets: true,
-                                autofocus: true,
-                                lineNumbers: true,
-                                lineWrapping: false,
-                                mode,
-                                scrollbarStyle: 'simple',
-                                viewportMargin: Infinity
-                            });
-                            formFile.$.refresh();
-                            // If content is longer than the maximum height or width, move cursor to the start of the editor
-                            formFile.$.on('focus', function () {
-                                let pane = formFile.$.getScrollerElement(),
-                                    maxRows = formFile.$.lineCount(),
-                                    moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
-                                formFile.$.setCursor(moveToStart ? 0 : maxRows, 0);
-                                if (moveToStart) {
-                                    formFile.$.scrollTo(0, 0);
-                                }
-                            });
-                        }).catch(e => {
-                            application.prepend(createAlert(e + "", 'error'));
-                            formFile.elements.content.style.display = "";
-                            formFile.elements.content.focus();
-                        });
-                    }
-                }
-            }).catch(e => {
-                application.prepend(createAlert(e + "", 'error'));
-            });
-        } else {}
+        if (415 === r.status) {
+            application.prepend(createAlert(r.status + ': ' + r.description, 'error', 1000));
+            updateTitle('Application · Bad Request');
+            return;
+        }
+        updateActivity(path, r.data);
+        createEditorMain(r);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     }).finally(() => {
@@ -1418,7 +1521,7 @@ function viewItemFolderEditor(path, query, hash, then) {
             }
             updateElement(applicationAside, [
                 createElement('h6', 'Work'),
-                createListOfWork(r.data.children)
+                createListOfWork(r.data.children, true)
             ]);
         }).catch(e => {
             application.prepend(createAlert(e + "", 'error'));
@@ -1508,41 +1611,11 @@ function viewItems(path, query, hash, then) {
             updateTitle('Application · Not Found');
             return;
         }
-        let parent = r.data.parent;
-        if (parent) {
-            parent.name = '..';
-            r.data.children.unshift(parent); // Add “parent” link on top of the file and folder list
-        }
         updateElement(applicationAside, [
             createElement('h6', 'Activity'),
             createListOfActivity()
         ]);
-        // Special case for the file and folder list view, update activity log after activity list is built so that
-        // current location will not be visible as the first item on the list until the user moves to another activity
-        updateActivity(r.data.route, r.data);
-        updateElement(applicationMain, [
-            createElement('h3', [
-                '📂 ',
-                createTraces('.' + path)
-            ]),
-            createList(r.data.children, path, query, hash),
-            r.data.has.next || r.data.has.prev ? createElement('nav', [
-                createPager(r.query.part, r.data.total, r.query.chunk, 2, function (part, current, disabled) {
-                    if (current || disabled) {
-                        this.addEventListener('click', e => e.preventDefault());
-                    } else {
-                        this.addEventListener('click', onClick);
-                    }
-                    this.href = toPath(r.data.route) + toQuery({
-                        chunk: r.query.chunk,
-                        part: part
-                    });
-                }, 'First', 'Previous', 'Next', 'Last')
-            ], {
-                'aria-label': 'Pagination'
-            }) : ""
-        ]);
-        updateTitle('Application · Folder');
+        createListMain(r);
     }).catch(e => {
         application.prepend(createAlert(e + "", 'error'));
     }).finally(() => {

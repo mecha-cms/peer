@@ -124,6 +124,19 @@ a {
   text-decoration: none;
 }
 
+audio,
+iframe,
+video {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+img {
+  height: auto;
+  max-width: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -309,6 +322,14 @@ pre code {
 
 :where(aside, main) > ul > li:not([aria-disabled])[aria-selected] {
   background: rgb(255 255 0 / 0.125);
+}
+
+:where(main) > h3 + div > img {
+  background-image: repeating-conic-gradient(#aaa 0% 25%, #ccc 25% 50%);
+  background-position: 50% 50%;
+  background-size: 2em 2em;
+  display: block;
+  margin: 0 auto;
 }
 
 :where(button, input, select, textarea) {
