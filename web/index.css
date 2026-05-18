@@ -324,6 +324,12 @@ pre code {
   background: rgb(255 255 0 / 0.125);
 }
 
+:where(main) > h3 + div > :where(audio, iframe, img, video) {
+  border: 1px solid #000;
+  display: block;
+  margin: 0 auto;
+}
+
 :where(main) > h3 + div > img {
   background-image: repeating-conic-gradient(#aaa 0% 25%, #ccc 25% 50%);
   background-position: 50% 50%;
@@ -522,12 +528,4 @@ form .CodeMirror-simplescroll-vertical {
 
 form .CodeMirror * + div {
   margin-top: 0;
-}
-
-.v-video .v-loader {
-  margin: 0;
-}
-
-.v-video .v-loaderContent {
-  white-space: nowrap;
 }

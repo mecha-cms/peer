@@ -13,7 +13,7 @@ const hub = 'http://127.0.0.1/test/hub';
 //     <script src="/path/to/index.js"></script>
 //
 // That’s it.
-const sub = toParent(document.currentScript.src).slice((window.location.protocol + '//' + window.location.hostname).length);
+const sub = toRelative(toParent(document.currentScript.src));
 
 const application = document.querySelector('[role=application]');
 
@@ -132,8 +132,7 @@ console.log(q);
 let currentChunk = q.chunk ?? 20,
     currentPart = q.part ?? 1,
     currentQuery = q.query ?? null,
-    currentSort = q.sort ?? null,
-    currentType = false;
+    currentSort = q.sort ?? null;
 
 formFile.addEventListener('submit', function (e) {
     clearAlerts();
@@ -278,6 +277,15 @@ function clearAlerts() {
 }
 
 function createAlert(text, type, timeOut) {
+    // Hub response description(s) are written using simple Markdown syntax (at most there will only be Markdown syntax
+    // in the form of bold, code, italic, and link). Below is a very minimal Markdown parser. When you want to build a
+    // serious application, you may want to load a proper Markdown parser to replace this one.
+    text = text.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+    text = text.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+    text = text.replace(/`(.*?)`/g, '<code>$1</code>');
+    text = text.replace(/\[(.*?)\]\((\S+)(?:\s+(?:"(.*?)"|'(.*?)'))?\)/g, function ($0, $1, $2, $3, $4) {
+        return '<a href="' + $2 + '"' + ($3 || $4 ? ' title="' + ($3 || $4) + '"' : "") + '>' + $1 + '</a>';
+    });
     const element = createElement('p', text, {
         'aria-live': 'error' === type ? 'assertive' : ('info' === type ? 'off' : ('success' === type ? 'polite' : false)),
         'role': 'alert'
@@ -396,7 +404,18 @@ function createListMain(r) {
         createListOfMain(children),
         has.next || has.prev ? createElement('nav', [
             createPager(query.part, total, query.chunk, 2, function (part, current, disabled) {
-                this.addEventListener('click', current || disabled ? (e => e.preventDefault()) : onClick);
+                this.addEventListener('click', current || disabled ? (e => e.preventDefault()) : function (e) {
+                    loadJSON(hub + '/at' + fromPath(toRelative(this.href))).then(createListMain).catch(e => {
+                        viewError(route, { _description: r.status + ': ' + r.description });
+                    }).finally(() => {
+                        updateBusyState(false, applicationMain);
+                        updateTitle('Application · Folder');
+                    });
+                    updateBusyState(true, applicationMain);
+                    updateRoute(this.href);
+                    updateTitle('Loading…');
+                    e.preventDefault();
+                });
                 this.href = toPath(route) + toQuery({
                     chunk: currentChunk,
                     part: part,
@@ -424,8 +443,7 @@ function createListOfActivity() {
             'aria-current': current === route ? 'page' : false,
             'href': is.blob ? hub + '/blob' + route : toPath(route) + (is.folder ? toQuery({
                 chunk: currentChunk,
-                part: currentPart,
-                sort: currentSort
+                part: 1
             }) : ""),
             'title': (is.folder ? 'Open' : 'View') + ' ' + route
         });
@@ -444,8 +462,7 @@ function createListOfMain(items) {
         const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
             'href': toPath(route) + (is.folder ? toQuery({
                 chunk: currentChunk,
-                part: currentPart,
-                sort: currentSort
+                part: 1
             }) : ""),
             'title': '..' === name ? 'Go to ' + toParent(route) : (is.folder ? 'Open' : 'View') + ' ' + route
         });
@@ -457,7 +474,7 @@ function createListOfMain(items) {
         linkDelete.addEventListener('click', function (e) {
             let hash = fromHash(window.location.hash),
                 path = fromPath(window.location.pathname),
-                pathToDelete = fromPath(this.getAttribute('href')).slice(0, -7),
+                pathToDelete = fromPath(toRelative(this.href)).slice(0, -7),
                 query = fromQuery(window.location.search);
             loadJSON(hub + '/at' + pathToDelete, 'DELETE').then(r => {
                 if (200 !== r.status) {
@@ -478,9 +495,9 @@ function createListOfMain(items) {
             'title': 'Edit ' + route
         });
         linkEdit.addEventListener('click', function (e) {
-            let pathToEdit = fromPath(this.getAttribute('href'));
+            let pathToEdit = fromPath(toRelative(this.href));
             updateRoute(toPath(pathToEdit));
-            pathToEdit = pathToEdit.slice(0, -6);
+            pathToEdit = pathToEdit.slice(0, -6); // Remove `#patch`
             viewItem(pathToEdit, {}, 'patch');
             e.preventDefault();
         });
@@ -496,10 +513,7 @@ function createListOfMain(items) {
             'href': hub + '/blob' + route,
             'title': 'View ' + route
         });
-        linkView.addEventListener('click', is.blob ? function (e) {
-            openBlob(this.href);
-            e.preventDefault();
-        } : function (e) {
+        linkView.addEventListener('click', function (e) {
             link.click();
             e.preventDefault();
         });
@@ -564,9 +578,9 @@ function createListOfWork(items, patch) {
                 'aria-current': 'page'
             });
             updateBusyState(true, applicationMain);
-            updateRoute(this.getAttribute('href'));
+            updateRoute(this.href);
             updateTitle('Loading…');
-            let base, route = fromPath(this.getAttribute('href')),
+            let base, route = fromPath(toRelative(this.href)),
                 type = this.getAttribute('data-type');
             if (patch) {
                 route = route.slice(0, -6);
@@ -584,6 +598,11 @@ function createListOfWork(items, patch) {
                             updateRoute(toPath('/enter')), view(onStaleAfter);
                             return;
                         }
+                        // The data returned from `/hub/content/*` is not as complete as the data returned from
+                        // `/hub/at/*` because the main focus of the former is to fetch the content. Most application(s)
+                        // should not fetch it directly; instead, it should be fetched after the `/hub/at/*` data has
+                        // been fetched, so that the data from the earlier fetch can be used to make the result of the
+                        // later fetch look complete
                         Object.assign(r.data, {
                             is: {
                                 blob: false,
@@ -709,8 +728,7 @@ function createTraces(path) {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
                 'href': toPath(trace.slice(1)) + (tracesMax === k + 1 ? "" : toQuery({
                     chunk: currentChunk,
-                    part: currentPart,
-                    sort: currentSort
+                    part: 1
                 }))
             });
             a.addEventListener('click', onClick);
@@ -722,13 +740,13 @@ function createTraces(path) {
 
 function createViewMain(r) {
     let {is, route, type, x} = r.data,
-        display = createElement('div');
+        view = createElement('div');
     updateElement(applicationMain, [
         createElement('h3', [
             '📄 ',
             createTraces('.' + route)
         ]),
-        display
+        view
     ]);
     updateTitle('Application · ' + (is.file ? 'File' : 'Folder') + ' Viewer');
     if (is.file) {
@@ -759,23 +777,23 @@ function createViewMain(r) {
                 }).catch(e => {
                     viewError(route, { _description: e + "" });
                 });
-                updateElement(display, codeParent);
+                updateElement(view, codeParent);
             });
         } else if ('audio/' === type.slice(0, 6)) {
             const audio = createElement('audio', false, {
                 'controls': true
             });
-            updateElement(display, audio);
+            updateElement(view, audio);
             f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
-                let revoke = function () {
-                        URL.revokeObjectURL(v);
-                        audio.removeEventListener('error', revoke);
-                        audio.removeEventListener('loadeddata', revoke);
-                    },
-                    v = URL.createObjectURL(blob);
+                let revoke, v;
+                revoke = function () {
+                    URL.revokeObjectURL(v);
+                    audio.removeEventListener('error', revoke);
+                    audio.removeEventListener('loadeddata', revoke);
+                };
                 audio.addEventListener('error', revoke, { once: true });
                 audio.addEventListener('loadeddata', revoke, { once: true });
-                audio.src = v;
+                audio.src = v = URL.createObjectURL(blob);
             });
             audio.focus();
         } else if ('image/' === type.slice(0, 6)) {
@@ -783,42 +801,41 @@ function createViewMain(r) {
                 'alt': "",
                 'tabindex': 0
             });
-            updateElement(display, image);
+            updateElement(view, image);
             f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
-                let revoke = function () {
-                        URL.revokeObjectURL(v);
-                        image.removeEventListener('error', revoke);
-                        image.removeEventListener('load', revoke);
-                    },
-                    v = URL.createObjectURL(blob);
+                let revoke, v;
+                revoke = function () {
+                    URL.revokeObjectURL(v);
+                    image.removeEventListener('error', revoke);
+                    image.removeEventListener('load', revoke);
+                };
                 image.addEventListener('error', revoke, { once: true });
                 image.addEventListener('load', revoke, { once: true });
-                image.src = v;
+                image.src = v = URL.createObjectURL(blob);
             });
             image.focus();
         } else if ('video/' === type.slice(0, 6)) {
             const video = createElement('video', false, {
                 'controls': true
             });
-            updateElement(display, video);
+            updateElement(view, video);
             f3h(hub + '/blob' + route).then(r => r.blob()).then(blob => {
-                let revoke = function () {
-                        URL.revokeObjectURL(v);
-                        video.removeEventListener('error', revoke);
-                        video.removeEventListener('loadeddata', revoke);
-                    },
-                    v = URL.createObjectURL(blob);
+                let revoke, v;
+                revoke = function () {
+                    URL.revokeObjectURL(v);
+                    video.removeEventListener('error', revoke);
+                    video.removeEventListener('loadeddata', revoke);
+                };
                 video.addEventListener('error', revoke, { once: true });
                 video.addEventListener('loadeddata', revoke, { once: true });
-                video.src = v;
+                video.src = v = URL.createObjectURL(blob);
             });
             video.focus();
         } else {
-            updateElement(display, createElement('pre', createElement('code', "")));
-            display.firstChild.firstChild.textContent = JSON.stringify(r, null, 2);
+            viewErrorView(toPath(route), { _type: type });
         }
     } else {
-        application.prepend(createAlert('No viewer is available for the <code>' + (type ?? 'folder') + '</code> resource type.', 'error'));
+        viewErrorView(toPath(route), { _type: type });
     }
 }
 
@@ -919,6 +936,16 @@ function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
         'content-type': 'application/json'
     }, headers);
     return fetch(path, Object.assign({ headers, method }, options, 'GET' === method || 'HEAD' === method ? {} : { body }));
+}
+
+function loadBlob(link) {
+    console.info(fromPath(link, hub + '/blob'));
+    return f3h(link).then(r => {
+        if (!r.ok) {
+            throw new Error('Request failed.');
+        }
+        return r.blob();
+    });
 }
 
 function loadCodeMirror5() {
@@ -1023,13 +1050,13 @@ function onBeforeUnload() {
 }
 
 function onClick(e) {
+    updateBusyState(true, applicationAside);
+    updateBusyState(true, applicationMain);
     updateRoute(this.href), view();
     e.preventDefault();
 }
 
 function onEnter(path, query, hash, then) {
-    updateBusyState(false, applicationAside);
-    updateBusyState(false, applicationMain);
     updateElement(application, [applicationHeader, applicationFlex, applicationFooter]);
     updateElement(applicationFlex, [applicationAside, applicationMain]);
     // Create file/folder button
@@ -1115,9 +1142,10 @@ function onEnter(path, query, hash, then) {
         let path = '/lot/' + this.value, query;
         updateRoute(toPath(path) + toQuery(query = {
             chunk: currentChunk,
-            part: currentPart,
-            sort: currentSort
+            part: 1
         }));
+        updateBusyState(true, applicationAside);
+        updateBusyState(true, applicationMain);
         if (this.options[this.selectedIndex].getAttribute('data-home')) {
             // Refresh option(s)
             onEnter(path, query, "", function () {
@@ -1171,18 +1199,13 @@ function onStaleAfter(path, query, hash, then) {
     then && then.call(application);
 }
 
-function openBlob(path, query, hash) {
-    f3h(path).then(r => {
-        if (!r.ok) {
-            throw new Error('Request failed.');
-        }
-        return r.blob();
-    }).then(blob => {
+function openBlob(link) {
+    loadBlob(link).then(blob => {
         let v = URL.createObjectURL(blob);
         window.open(v, '_blank');
         setTimeout(() => URL.revokeObjectURL(v), 1000);
     }).catch(e => {
-        application.prepend(createAlert(e + "", 'error'));
+        // TODO
     });
 }
 
@@ -1220,6 +1243,13 @@ function toQuery(object, path = "", r = []) {
         r.push(path + '=' + encodeURIComponent(fromValue(object)));
     }
     return r.length ? '?' + r.join('&') : null;
+}
+
+function toRelative(absolute) {
+    if ('/' === absolute[0]) {
+        return absolute;
+    }
+    return absolute.slice((window.location.protocol + '//' + window.location.hostname).length);
 }
 
 function toValue(v) {
@@ -1365,11 +1395,10 @@ function viewEnter(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = false;
     onExit(path, query, hash, function () {
-        application.append(formUser);
-        then && then.call(application);
+        updateElement(application, formUser);
         formUser.elements.key.focus();
+        then && then.call(application);
     });
 }
 
@@ -1377,7 +1406,6 @@ function viewError(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = false;
     updateBusyState(false, applicationAside);
     updateBusyState(false, applicationHeader);
     updateBusyState(false, applicationMain);
@@ -1395,11 +1423,17 @@ function viewErrorEditor(path, query, hash, then) {
     viewError(path, query, hash, then);
 }
 
+function viewErrorView(path, query, hash, then) {
+    let type = query._type ?? 'folder';
+    delete query._type;
+    query._description = 'No direct viewer is available for the <code>' + type + '</code> resource type.';
+    viewError(path, query, hash, then);
+}
+
 function viewItem(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = 'file';
     deleteMark(path);
     updateBusyState(true, applicationAside);
     updateBusyState(true, applicationMain);
@@ -1424,7 +1458,7 @@ function viewItem(path, query, hash, then) {
                 return;
             }
             updateElement(applicationAside, [
-                createElement('h6', 'Work'),
+                createElement('h6', 'View'),
                 createListOfWork(r.data.children)
             ]);
         }).catch(e => {
@@ -1470,7 +1504,6 @@ function viewItemFileEditorText(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = 'file';
     deleteMark(path);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
@@ -1483,7 +1516,7 @@ function viewItemFileEditorText(path, query, hash, then) {
                 return;
             }
             updateElement(applicationAside, [
-                createElement('h6', 'Work'),
+                createElement('h6', 'Edit'),
                 createListOfWork(r.data.children, true)
             ]);
         }).catch(e => {
@@ -1534,7 +1567,6 @@ function viewItemFolderEditor(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = 'folder';
     deleteMark(path);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path).then(r => {
@@ -1601,7 +1633,6 @@ function viewItems(path, query, hash, then) {
     abort.abort();
     abort = new AbortController;
     clearAlerts();
-    currentType = 'folder';
     deleteMark(path);
     updateTitle('Loading…');
     loadJSON(hub + '/at' + path + toQuery({
