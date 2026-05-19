@@ -256,7 +256,10 @@ dt {
 }
 
 label {
+  align-items: center;
   cursor: pointer;
+  display: inline-flex;
+  gap: 0.5em;
   user-select: none;
 }
 
@@ -378,6 +381,34 @@ pre code {
 :where(input, textarea):user-invalid {
   border-color: #f00;
   color: #f00;
+}
+
+:where(input):where([type='checkbox'], [type='radio']) {
+  height: 1em;
+  overflow: hidden;
+  padding: 0;
+  width: 1em;
+}
+
+:where(input)[type='radio'] {
+  border-radius: 100%;
+}
+
+:where(input):where([type='checkbox'], [type='radio'])::after {
+  content: '●';
+  display: block;
+  font-size: 80%;
+  line-height: 1rem;
+  text-align: center;
+  visibility: hidden;
+}
+
+:where(input):where([type='checkbox'], [type='radio']):checked::after {
+  visibility: visible;
+}
+
+:where(input)[type='checkbox']::after {
+  content: '✓';
 }
 
 :where(textarea) {

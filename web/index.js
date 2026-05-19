@@ -127,8 +127,6 @@ let abort = new AbortController,
 
 const q = fromQuery(window.location.search);
 
-console.log(q);
-
 let currentChunk = q.chunk ?? 20,
     currentPart = q.part ?? 1,
     currentQuery = q.query ?? null,
@@ -1694,7 +1692,14 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
         })
     ], {
         'role': 'group'
-    })
+    }),
+    createElement('p', createElement('label', [
+        createElement('input', false, {
+            'name': 'kick',
+            'type': 'checkbox'
+        }),
+        createElement('span', 'Redirect to file')
+    ]))
 ], {
     'method': 'dialog'
 }));
@@ -1718,7 +1723,15 @@ const dialogFolderNew = createElement('dialog', formFolderNew = createElement('f
         })
     ], {
         'role': 'group'
-    })
+    }),
+    createElement('p', createElement('label', [
+        createElement('input', false, {
+            'checked': true,
+            'name': 'kick',
+            'type': 'checkbox'
+        }),
+        createElement('span', 'Redirect to folder')
+    ]))
 ], {
     'method': 'dialog'
 }));
@@ -1729,8 +1742,9 @@ formFileNew.addEventListener('reset', function () {
 
 formFileNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let path = fromPath(window.location.pathname);
-    let nameParts = this.elements.name.value.split('.'),
+    let kick = this.elements.kick.checked,
+        path = fromPath(window.location.pathname),
+        nameParts = this.elements.name.value.split('.'),
         nameX = nameParts.pop();
     loadJSON(hub + '/at' + path, 'PUT', {}, {
         content: "",
@@ -1741,11 +1755,15 @@ formFileNew.addEventListener('submit', function (e) {
             dialogFileNew.close();
             updateActivity(r.data.route, r.data);
             updateMark(r.data.route);
-            viewItems(path, {
-                chunk: currentChunk,
-                part: currentPart,
-                sort: currentSort
-            });
+            if (kick) {
+                // TODO
+            } else {
+                viewItems(path, {
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
+                });
+            }
             this.reset();
         } else {
             dialogFileNew.prepend(createAlert(r.status + ': ' + r.description, 'error'));
@@ -1762,8 +1780,9 @@ formFolderNew.addEventListener('reset', function () {
 
 formFolderNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let path = fromPath(window.location.pathname);
-    let route = this.elements.name.value,
+    let kick = this.elements.kick.checked,
+        path = fromPath(window.location.pathname),
+        route = this.elements.name.value,
         routeName = toBase(route),
         routeSub = toParent(route);
     loadJSON(hub + '/at' + path, 'PUT', {}, {
@@ -1775,16 +1794,20 @@ formFolderNew.addEventListener('submit', function (e) {
             route.split('/').map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
                 updateMark(path + '/' + s);
             });
-            updateRoute(toPath(path + '/' + route) + toQuery({
-                chunk: currentChunk,
-                part: currentPart,
-                sort: currentSort
-            }));
-            viewItems(path + '/' + route, {
-                chunk: currentChunk,
-                part: currentPart,
-                sort: currentSort
-            });
+            if (kick) {
+                updateRoute(toPath(path + '/' + route) + toQuery({
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
+                }));
+                viewItems(path + '/' + route, {
+                    chunk: currentChunk,
+                    part: currentPart,
+                    sort: currentSort
+                });
+            } else {
+                // TODO
+            }
             this.reset();
         } else {
             dialogFolderNew.prepend(createAlert(r.status + ': ' + r.description, 'error'));
