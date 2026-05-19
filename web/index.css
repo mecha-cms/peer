@@ -504,7 +504,12 @@ code.cm-s {
   background: #fafafa;
 }
 
+form .CodeMirror * + div {
+  margin-top: 0;
+}
+
 form .CodeMirror {
+  background: #ffc;
   border: 1px solid #000;
   box-sizing: content-box;
   font-size: 80%;
@@ -514,6 +519,11 @@ form .CodeMirror {
 
 form .CodeMirror-code {
   cursor: text;
+}
+
+form .CodeMirror-gutters {
+  background: #dda;
+  border-right-color: #000;
 }
 
 form .CodeMirror-scroll {
@@ -526,6 +536,7 @@ form .CodeMirror-simplescroll-vertical {
   cursor: default;
 }
 
-form .CodeMirror * + div {
-  margin-top: 0;
+form .CodeMirror-simplescroll-horizontal div,
+form .CodeMirror-simplescroll-vertical div {
+  border-radius: 0;
 }
