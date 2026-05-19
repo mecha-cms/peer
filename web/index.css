@@ -18,7 +18,7 @@
 :root {
   background: #ccc;
   color: #000;
-  font: 400 normal 16px/1.5 serif, 'Noto Color Emoji';
+  font: 400 normal 16px/1.5 'Times New Roman', serif, 'Noto Color Emoji';
   margin: 0;
   padding: 2rem;
 }
@@ -201,7 +201,7 @@ abbr {
 
 code {
   display: inline-block;
-  font-family: monospace;
+  font-family: 'Courier New', monospace;
   font-size: 0.8em;
 }
 
@@ -381,7 +381,9 @@ pre code {
 }
 
 :where(textarea) {
-  font-family: monospace;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8em;
+  line-height: 1.1;
   resize: vertical;
   width: 100%;
 }
@@ -512,7 +514,8 @@ form .CodeMirror {
   background: #ffc;
   border: 1px solid #000;
   box-sizing: content-box;
-  font-size: 80%;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8em;
   height: auto;
   line-height: 1.1;
 }
@@ -521,9 +524,17 @@ form .CodeMirror-code {
   cursor: text;
 }
 
+form .CodeMirror-focused .CodeMirror-selected {
+  background: rgb(0 0 0 / 0.25);
+}
+
 form .CodeMirror-gutters {
   background: #dda;
   border-right-color: #000;
+}
+
+form .CodeMirror-linenumber {
+  color: inherit;
 }
 
 form .CodeMirror-scroll {
@@ -531,12 +542,31 @@ form .CodeMirror-scroll {
   min-height: 1em;
 }
 
+form .CodeMirror-scrollbar-filler {
+  background: #000;
+}
+
+form .CodeMirror-selected {
+  background: rgb(0 0 0 / 0.15);
+}
+
+form .CodeMirror-simplescroll-horizontal {
+  height: 0.25rem;
+}
+
+form .CodeMirror-simplescroll-vertical {
+  width: 0.25rem;
+}
+
 form .CodeMirror-simplescroll-horizontal,
 form .CodeMirror-simplescroll-vertical {
+  background: #dda;
   cursor: default;
 }
 
 form .CodeMirror-simplescroll-horizontal div,
 form .CodeMirror-simplescroll-vertical div {
+  background: #bb9;
+  border: 0;
   border-radius: 0;
 }
