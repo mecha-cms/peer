@@ -608,9 +608,9 @@ function createListOfWork(items, patch) {
                                 folder: false,
                                 text: true
                             },
-                            name: base.split('.').slice(0, -1).join('.'),
+                            name: -1 !== base.indexOf('.') ? base.split('.').slice(0, -1).join('.') : base,
                             route,
-                            x: base.split('.').pop()
+                            x: -1 !== base.indexOf('.') ? base.split('.').pop() : null
                         });
                         updateActivity(route, r.data);
                         updateEditorMain(r);
@@ -1742,21 +1742,23 @@ formFileNew.addEventListener('reset', function () {
 
 formFileNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let kick = this.elements.kick.checked,
-        path = fromPath(window.location.pathname),
-        nameParts = this.elements.name.value.split('.'),
-        nameX = nameParts.pop();
+    let base = this.elements.name.value,
+        kick = this.elements.kick.checked,
+        path = fromPath(window.location.pathname);
+    let name = -1 !== base.indexOf('.') ? base.split('.').slice(0, -1).join('.') : base,
+        x = -1 !== base.indexOf('.') ? base.split('.').pop() : null;
     loadJSON(hub + '/at' + path, 'PUT', {}, {
         content: "",
-        name: nameParts.join('.'),
-        x: nameX
+        name,
+        x
     }).then(r => {
         if (201 === r.status) {
             dialogFileNew.close();
             updateActivity(r.data.route, r.data);
             updateMark(r.data.route);
             if (kick) {
-                // TODO
+                updateRoute(toPath(path += '/' + name + (x ? '.' + x : "")) + toHash('patch'));
+                viewItemFileEditorText(path, {}, toHash('patch'));
             } else {
                 viewItems(path, {
                     chunk: currentChunk,
@@ -1792,21 +1794,27 @@ formFolderNew.addEventListener('submit', function (e) {
         if (201 === r.status) {
             dialogFolderNew.close();
             route.split('/').map((x, i, r) => r.slice(0, i + 1).join('/')).forEach(s => {
+                updateActivity(path + '/' + s, Object.assign({}, r.data, {
+                    name: toBase(s),
+                    route: path + '/' + s
+                }));
                 updateMark(path + '/' + s);
             });
             if (kick) {
-                updateRoute(toPath(path + '/' + route) + toQuery({
+                updateRoute(toPath(path += '/' + route) + toQuery({
                     chunk: currentChunk,
-                    part: currentPart,
-                    sort: currentSort
+                    part: 1
                 }));
-                viewItems(path + '/' + route, {
+                viewItems(path, {
+                    chunk: currentChunk,
+                    part: 1
+                });
+            } else {
+                viewItems(path, {
                     chunk: currentChunk,
                     part: currentPart,
                     sort: currentSort
                 });
-            } else {
-                // TODO
             }
             this.reset();
         } else {

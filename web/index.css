@@ -343,7 +343,7 @@ pre code {
 
 :where(button, input, select, textarea) {
   appearance: none;
-  background: #ffc;
+  background: #ffc none no-repeat 50% 50%;
   border: 1px solid #000;
   color: #000;
   display: inline-block;
@@ -372,9 +372,8 @@ pre code {
 
 :where(select),
 :where(select):where(:active, :focus, :hover) {
-  background-image: url('data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2020%2020%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpolyline%20fill%3D%22none%22%20points%3D%224%2C7%2010%2C13%2016%2C7%22%20stroke%3D%22%23000%22%20stroke-linecap%3D%22butt%22%20stroke-linejoin%3D%22miter%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E');
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAgMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTQgN0wxMCAxM0wxNiA3IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJidXR0IiBzdHJva2UtbGluZWpvaW49Im1pdGVyIiBzdHJva2Utd2lkdGg9IjIiLz48L3N2Zz4=');
   background-position: right 0.5rem center;
-  background-repeat: no-repeat;
   background-size: 1rem;
 }
 
@@ -384,6 +383,7 @@ pre code {
 }
 
 :where(input):where([type='checkbox'], [type='radio']) {
+  cursor: pointer;
   height: 1em;
   overflow: hidden;
   padding: 0;
@@ -394,21 +394,13 @@ pre code {
   border-radius: 100%;
 }
 
-:where(input):where([type='checkbox'], [type='radio'])::after {
-  content: '●';
-  display: block;
-  font-size: 80%;
-  line-height: 1rem;
-  text-align: center;
-  visibility: hidden;
+:where(input)[type='checkbox']:checked {
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTIgOSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMSA0LjVMNCA3LjVMMTEgMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0ic3F1YXJlIiBzdHJva2UtbGluZWpvaW49Im1pdGVyIiBzdHJva2Utd2lkdGg9IjEuNSIvPjwvc3ZnPg==');
+  background-size: calc(100% - 2px) calc(100% - 2px);
 }
 
-:where(input):where([type='checkbox'], [type='radio']):checked::after {
-  visibility: visible;
-}
-
-:where(input)[type='checkbox']::after {
-  content: '✓';
+:where(input)[type='radio']:checked {
+  background-image: radial-gradient(circle, #000 0 40%, transparent 41% 100%);
 }
 
 :where(textarea) {
@@ -598,6 +590,7 @@ form .CodeMirror-simplescroll-vertical {
 form .CodeMirror-simplescroll-horizontal div,
 form .CodeMirror-simplescroll-vertical div {
   background: #bb9;
-  border: 0;
   border-radius: 0;
+  border: 0;
+  cursor: pointer;
 }
