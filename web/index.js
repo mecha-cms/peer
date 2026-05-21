@@ -1047,7 +1047,13 @@ function loadFolders() {
         limit: 'false',
         x: 0 // List folder(s) only
     })).then(r => {
-        return (folders = r.data?.children ?? []);
+        folders = r.data?.children ?? [];
+        if (!folders.length) {
+            foldersPromise = false;
+        }
+        return folders;
+    }).catch(e => {
+        folderPromise = false;
     });
     return foldersPromise;
 }
@@ -1229,6 +1235,7 @@ function onEnterAfter(path, query, hash, then) {
 function onExit(path, query, hash, then) {
     activity = [];
     cache = {};
+    folderPromise = false;
     folders = [];
     localStorage.removeItem('activity');
     localStorage.removeItem('cache');
@@ -1241,6 +1248,7 @@ function onExit(path, query, hash, then) {
 
 function onExitAfter(path, query, hash, then) {
     application.prepend(createAlert('Logged out.', 'success'));
+    folderPromise = false;
     folders = [];
     then && then.call(application);
 }
@@ -1255,6 +1263,7 @@ function onPopState() {
 
 function onStaleAfter(path, query, hash, then) {
     application.prepend(createAlert('Stale token.', 'error'));
+    folderPromise = false;
     folders = [];
     then && then.call(application);
 }
