@@ -355,7 +355,7 @@ function createEditorMain(r) {
                     });
                     $.refresh();
                     // If content is longer than the maximum height or width, move cursor to the start of the editor
-                    $.on('focus', function () {
+                    function onFocusOnce() {
                         let pane = $.getScrollerElement(),
                             maxRows = $.lineCount(),
                             moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
@@ -363,7 +363,9 @@ function createEditorMain(r) {
                         if (moveToStart) {
                             $.scrollTo(0, 0);
                         }
-                    });
+                        $.off('focus', onFocusOnce);
+                    }
+                    $.on('focus', onFocusOnce);
                     application.$ = $;
                 }).catch(e => {
                     application.prepend(createAlert(e + "", 'error'));
@@ -1379,6 +1381,18 @@ function updateEditorMain(r) {
                 mode = 'yaml';
             }
             if ($ = application.$) {
+                // If content is longer than the maximum height or width, move cursor to the start of the editor
+                function onFocusOnce() {
+                    let pane = $.getScrollerElement(),
+                        maxRows = $.lineCount(),
+                        moveToStart = maxRows > 45 || pane.scrollWidth > pane.clientWidth;
+                    $.setCursor(moveToStart ? 0 : maxRows, 0);
+                    if (moveToStart) {
+                        $.scrollTo(0, 0);
+                    }
+                    $.off('focus', onFocusOnce);
+                }
+                $.on('focus', onFocusOnce);
                 $.setOption('mode', mode);
                 $.setValue(content);
                 $.save();
