@@ -598,7 +598,9 @@ function createListOfWork(items, patch) {
             base = decodeURIComponent(toBase(route));
             if (patch) {
                 if ('folder' === this.getAttribute('data-type')) {
-                    loadJSON(hub + '/at' + route).then(r => {
+                    loadJSON(hub + '/at' + route + toQuery({
+                        limit: 0 // Do not fetch children to quickly capture the resource status
+                    })).then(r => {
                         if ([400, 404].includes(r.status)) {
                             return viewError(route, { _description: r.status + ': ' + r.description });
                         }
@@ -1588,9 +1590,11 @@ function viewItemFolderEditor(path, query, hash, then) {
     updateBusyState(true, applicationAside);
     updateBusyState(true, applicationMain);
     updateTitle('Loading…');
-    loadJSON(hub + '/at' + path).then(r => {
+    loadJSON(hub + '/at' + path + toQuery({
+        limit: 0 // Do not fetch children to quickly capture the resource status
+    })).then(r => {
         loadJSON(hub + '/at' + toParent(path) + toQuery({
-            limit: 'false',
+            limit: 'false', // Fetch all children for the side-bar view
             x: 0 // List folder(s) only
         })).then(r => {
             updateBusyState(false, applicationAside);
