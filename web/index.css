@@ -19,7 +19,7 @@
   outline: 2px solid #000;
 }
 
-:where(audio, button, dialog, input, main > h3 + div > img, select, textarea, video):focus {
+:where(audio, button, input, main > h3 + div > img, select, textarea, video):focus {
   outline-offset: -2px;
 }
 
@@ -157,8 +157,13 @@ dialog {
   box-shadow: 0 1px 0.25rem rgb(0 0 0 / 0.5);
   inset: 0;
   margin: auto;
+  outline: 0;
   padding: 1rem;
   text-align: left;
+}
+
+dialog:focus {
+  outline: 0;
 }
 
 dialog::backdrop {
@@ -388,6 +393,7 @@ pre code {
 :where(input, textarea):user-invalid {
   border-color: #f00;
   color: #f00;
+  outline-color: #f00;
 }
 
 :where(input):where([type='checkbox'], [type='radio']) {

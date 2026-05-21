@@ -1709,7 +1709,7 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
     createElement('p', [
         createElement('input', false, {
             'autofocus': true,
-            'name': 'name',
+            'name': 'base',
             'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+',
             'placeholder': 'foo-bar.baz',
             'required': true,
@@ -1740,7 +1740,7 @@ const dialogFolderNew = createElement('dialog', formFolderNew = createElement('f
     createElement('p', [
         createElement('input', false, {
             'autofocus': true,
-            'name': 'name',
+            'name': 'route',
             'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)(/([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*))*',
             'placeholder': 'foo/bar/baz',
             'required': true,
@@ -1773,7 +1773,7 @@ formFileNew.addEventListener('reset', function () {
 
 formFileNew.addEventListener('submit', function (e) {
     clearAlerts();
-    let base = this.elements.name.value,
+    let base = this.elements.base.value,
         kick = this.elements.kick.checked,
         path = fromPath(window.location.pathname);
     let name = -1 !== base.indexOf('.') ? base.split('.').slice(0, -1).join('.') : base,
@@ -1800,6 +1800,8 @@ formFileNew.addEventListener('submit', function (e) {
             this.reset();
         } else {
             dialogFileNew.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            this.elements.base.focus();
+            this.elements.base.select();
         }
     }).catch(e => {
         dialogFileNew.close();
@@ -1816,7 +1818,7 @@ formFolderNew.addEventListener('submit', function (e) {
     clearAlerts();
     let kick = this.elements.kick.checked,
         path = fromPath(window.location.pathname),
-        route = this.elements.name.value,
+        route = this.elements.route.value,
         routeName = toBase(route),
         routeSub = toParent(route);
     loadJSON(hub + '/at' + path, 'PUT', {}, {
@@ -1852,6 +1854,8 @@ formFolderNew.addEventListener('submit', function (e) {
             this.reset();
         } else {
             dialogFolderNew.prepend(createAlert(r.status + ': ' + r.description, 'error'));
+            this.elements.route.focus();
+            this.elements.route.select();
         }
     }).catch(e => {
         dialogFolderNew.close();
