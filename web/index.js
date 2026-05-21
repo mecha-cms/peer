@@ -1,5 +1,8 @@
 (() => {
 
+// Replace the value to `false` in case you want to use this application example in public, for whatever the reason(s)
+const test = true;
+
 // Replace the value with your RPC base URL
 const hub = 'http://127.0.0.1/test/hub';
 
@@ -338,6 +341,8 @@ function createEditorMain(r) {
                     $ = CodeMirror.fromTextArea(formFile.elements.content, {
                         autoCloseBrackets: true,
                         autofocus: true,
+                        // Pressing `Shift-Tab` or `Tab` will exit from the editor. Use `Control-]` to increase current
+                        // indentation and `Control-[` to decrease it.
                         extraKeys: {
                             'Shift-Tab': false,
                             'Tab': false
@@ -968,7 +973,6 @@ function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
 }
 
 function loadBlob(link) {
-    console.info(fromPath(link, hub + '/blob'));
     return f3h(link).then(r => {
         if (!r.ok) {
             throw new Error('Request failed.');
@@ -1060,16 +1064,39 @@ function loadJS(src) {
 
 function loadJSON(path, method = 'GET', headers = {}, body = "", options = {}) {
     return f3h(path, method, headers, body, options).then(r => r.json().then(r => {
-        console.groupCollapsed('🌐 ' + method + ' ' + path);
-        if ('GET' === method && path.includes('?')) {
-            console.log('📤', fromQuery(path.split('?').pop()));
-        } else if (body) {
-            console.log('📤', body);
+        if (test) {
+            console.groupCollapsed('🌐 ' + method + ' ' + path);
+            if ('GET' === method && path.includes('?')) {
+                console.log('📤', fromQuery(path.split('?').pop()));
+            } else if (body) {
+                console.log('📤', body);
+            }
+            console.log('📥', r);
+            console.groupEnd();
         }
-        console.log('📥', r);
-        console.groupEnd();
         return r;
     }));
+}
+
+function loadMediaElement7() {
+    if (window.MediaElementPlayer) {
+        return Promise.resolve(window.MediaElementPlayer);
+    }
+    const base = 'https://cdnjs.cloudflare.com/ajax/libs/mediaelement/7.0.2';
+    const info = createAlert('Loading MediaElement.js library…', 'info');
+    application.prepend(info);
+    return Promise.all([
+        loadCSS(base + '/mediaelementplayer.min.css'),
+        loadJS(base + '/mediaelement-and-player.min.js')
+    ]).then(() => {
+        if (!window.MediaElementPlayer) {
+            throw new Error('Error loading `MediaElement` library!');
+        }
+        info.remove();
+        return window.MediaElementPlayer;
+    }).catch(e => {
+        updateAlert(info, e + "", 'error');
+    });
 }
 
 function onBeforeUnload() {
@@ -1212,6 +1239,7 @@ function onExit(path, query, hash, then) {
 
 function onExitAfter(path, query, hash, then) {
     application.prepend(createAlert('Logged out.', 'success'));
+    folders = [];
     then && then.call(application);
 }
 
@@ -1225,6 +1253,7 @@ function onPopState() {
 
 function onStaleAfter(path, query, hash, then) {
     application.prepend(createAlert('Stale token.', 'error'));
+    folders = [];
     then && then.call(application);
 }
 
