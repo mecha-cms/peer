@@ -754,7 +754,7 @@ function createText(content) {
 
 function createTraces(path) {
     const span = createElement('span');
-    let trace = '/',
+    let trace = "",
         traces = path.split('/'),
         tracesMax = traces.length;
     traces.forEach((v, k) => {
@@ -764,7 +764,8 @@ function createTraces(path) {
             trace += '/' + (v = decodeURIComponent(v));
             const a = createElement('a', v, {
                 'aria-current': tracesMax === k + 1 ? 'location' : false,
-                'href': toPath(trace.slice(1)) + (tracesMax === k + 1 ? "" : toQuery({
+                'data-route': trace,
+                'href': toPath(trace) + (tracesMax === k + 1 ? "" : toQuery({
                     chunk: currentChunk,
                     part: 1
                 }))
@@ -1870,7 +1871,7 @@ document.addEventListener('dragend', function (e) {
 
 document.addEventListener('dragover', function (e) {
     this.querySelectorAll('.drop-area').forEach(v => v.classList.remove('drop-area'));
-    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"]');
+    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
     // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
     if (!dropArea && e.dataTransfer.types.includes('Files')) {
         dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
@@ -1905,7 +1906,7 @@ document.addEventListener('dragstart', function (e) {
 document.addEventListener('drop', function (e) {
     e.preventDefault();
     const {files} = e.dataTransfer;
-    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"]');
+    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
     // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
     if (!dropArea && files.length > 0) {
         dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
