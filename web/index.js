@@ -26,9 +26,9 @@ const applicationFooter = createElement('footer');
 const applicationHeader = createElement('header', false, { 'aria-busy': 'true' });
 const applicationMain = createElement('main', false, { 'aria-busy': 'true' });
 
-const formBlob = createElement('form', false, {
-    'method': 'post'
-});
+const fileBasePattern = '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+';
+const folderBasePattern = '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)';
+const folderRoutePattern = folderBasePattern + '(/' + folderBasePattern + '){0,5}';
 
 const formFile = createElement('form', [
     createElement('div', createElement('textarea', "", {
@@ -38,7 +38,7 @@ const formFile = createElement('form', [
     createElement('p', [
         createElement('input', false, {
             'name': 'name',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+',
+            'pattern': fileBasePattern,
             'placeholder': 'foo-bar.baz',
             'style': 'flex:1;',
             'type': 'text'
@@ -64,7 +64,7 @@ const formFolder = createElement('form', [
     createElement('p', [
         createElement('input', false, {
             'name': 'name',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)',
+            'pattern': folderBasePattern,
             'placeholder': 'foo-bar',
             'style': 'flex:1;',
             'type': 'text'
@@ -141,7 +141,7 @@ formFile.addEventListener('submit', function (e) {
         name = this.elements.name.value,
         path = fromPath(this.action, hub + '/at'),
         pathParent = toParent(path), query,
-        task = this.getAttribute('data-task') || 'patch';
+        task = this.dataset.task || 'patch';
     if ('delete' === task) {
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
@@ -173,7 +173,7 @@ formFile.addEventListener('submit', function (e) {
 
 formFile.querySelectorAll('[type=submit]').forEach(v => {
     v.addEventListener('click', function () {
-        this.form.setAttribute('data-task', this.value);
+        this.form.dataset.task = this.value;
     });
 });
 
@@ -182,7 +182,7 @@ formFolder.addEventListener('submit', function (e) {
     let name = this.elements.name.value,
         path = fromPath(this.action, hub + '/at'),
         pathParent = toParent(path),
-        task = this.getAttribute('data-task') || 'patch';
+        task = this.dataset.task || 'patch';
     if ('delete' === task) {
         loadJSON(this.action, 'DELETE').then(r => {
             if (200 === r.status) {
@@ -213,7 +213,7 @@ formFolder.addEventListener('submit', function (e) {
 
 formFolder.querySelectorAll('[type=submit]').forEach(v => {
     v.addEventListener('click', function () {
-        this.form.setAttribute('data-task', this.value);
+        this.form.dataset.task = this.value;
     });
 });
 
@@ -413,7 +413,10 @@ function createListMain(r) {
             '📂 ',
             createTraces('.' + route)
         ]),
-        createListOfMain(children),
+        updateElement(createListOfMain(children), false, {
+            'data-route': route,
+            'data-type': 'inode/directory'
+        }),
         has.next || has.prev ? createElement('nav', [
             createPager(query.part, total, query.chunk, 2, function (part, current, disabled) {
                 this.addEventListener('click', current || disabled ? (e => e.preventDefault()) : function (e) {
@@ -470,7 +473,7 @@ function createListOfActivity() {
 function createListOfMain(items) {
     const list = createElement('ul');
     items.forEach(v => {
-        let {is, name, route, size, x} = v;
+        let {is, name, route, size, type, x} = v;
         const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
             'href': toPath(route) + (is.folder ? toQuery({
                 chunk: currentChunk,
@@ -559,7 +562,10 @@ function createListOfMain(items) {
             sizes[route],
             links
         ], {
-            'aria-selected': mark[route] ? 'true' : false
+            'aria-selected': mark[route] ? 'true' : false,
+            'data-route': route,
+            'data-type': type ?? 'inode/directory',
+            'draggable': 'true'
         }));
     });
     return list;
@@ -578,7 +584,7 @@ function createListOfWork(items, patch) {
         const link = createElement('a', name + (is.file && x ? '.' + x : ""), {
             'aria-current': current === route ? 'page' : false,
             'data-is-text': is.text ? 'true' : false,
-            'data-type': type ?? 'folder',
+            'data-type': type ?? 'inode/directory',
             'href': toPath(route) + (patch ? toHash('patch') : ""),
             'title': (patch ? 'Edit' : 'View') + ' ' + route
         });
@@ -593,13 +599,13 @@ function createListOfWork(items, patch) {
             updateRoute(this.href);
             updateTitle('Loading…');
             let base, route = fromPath(toRelative(this.href)),
-                type = this.getAttribute('data-type');
+                type = this.dataset.type;
             if (patch) {
                 route = route.slice(0, -6);
             }
             base = decodeURIComponent(toBase(route));
             if (patch) {
-                if ('folder' === this.getAttribute('data-type')) {
+                if ('inode/directory' === this.dataset.type) {
                     loadJSON(hub + '/at' + route + toQuery({
                         limit: 0 // Do not fetch children to quickly capture the resource status
                     })).then(r => {
@@ -619,7 +625,7 @@ function createListOfWork(items, patch) {
                     }).finally(() => {
                         updateBusyState(false, applicationMain);
                     });
-                } else if (this.getAttribute('data-is-text')) {
+                } else if (this.dataset.isText) {
                     loadJSON(hub + '/content' + route).then(r => {
                         if ([400, 404, 415].includes(r.status)) {
                             return viewError(route, { _description: r.status + ': ' + r.description });
@@ -1212,7 +1218,7 @@ function onEnter(path, query, hash, then) {
         }));
         updateBusyState(true, applicationAside);
         updateBusyState(true, applicationMain);
-        if (this.options[this.selectedIndex].getAttribute('data-home')) {
+        if (this.options[this.selectedIndex].dataset.home) {
             // Refresh option(s)
             onEnter(path, query, "", function () {
                 viewItems(path, query);
@@ -1500,14 +1506,14 @@ function viewError(path, query, hash, then) {
 }
 
 function viewErrorEditor(path, query, hash, then) {
-    let type = query._type ?? 'folder';
+    let type = query._type ?? 'inode/directory';
     delete query._type;
     query._description = 'No editor is available for the <code>' + type + '</code> resource type.';
     viewError(path, query, hash, then);
 }
 
 function viewErrorView(path, query, hash, then) {
-    let type = query._type ?? 'folder';
+    let type = query._type ?? 'inode/directory';
     delete query._type;
     query._description = 'No direct viewer is available for the <code>' + type + '</code> resource type.';
     viewError(path, query, hash, then);
@@ -1639,16 +1645,6 @@ function viewItemFolderEditor(path, query, hash, then) {
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
-        // formFolder.action = hub + '/at' + path;
-        // formFolder.elements.name.value = r.data.name;
-        // updateElement(applicationMain, [
-        //     createElement('h3', [
-        //         '📁 ',
-        //         createTraces('.' + path)
-        //     ]),
-        //     formFolder
-        // ]);
-        // updateTitle('Application · Folder Editor');
         updateActivity(path, r.data);
         createEditorMain(r);
     }).catch(e => {
@@ -1710,7 +1706,7 @@ const dialogFileNew = createElement('dialog', formFileNew = createElement('form'
         createElement('input', false, {
             'autofocus': true,
             'name': 'base',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)?\\.[A-Za-z\\d]+',
+            'pattern': fileBasePattern,
             'placeholder': 'foo-bar.baz',
             'required': true,
             'type': 'text'
@@ -1741,7 +1737,7 @@ const dialogFolderNew = createElement('dialog', formFolderNew = createElement('f
         createElement('input', false, {
             'autofocus': true,
             'name': 'route',
-            'pattern': '([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*)(/([#+.@_~\\-]?[A-Za-z\\d]+([._\\-][A-Za-z\\d]+)*))*',
+            'pattern': folderRoutePattern,
             'placeholder': 'foo/bar/baz',
             'required': true,
             'type': 'text'
@@ -1862,6 +1858,76 @@ formFolderNew.addEventListener('submit', function (e) {
         viewError(path, { _description: e + "" });
     });
     e.preventDefault();
+});
+
+let itemToDrop;
+
+document.addEventListener('dragend', function (e) {
+    this.querySelectorAll('.drop-area').forEach(v => v.classList.remove('drop-area'));
+    itemToDrop && itemToDrop.classList.remove('item-to-drop');
+    itemToDrop = null;
+});
+
+document.addEventListener('dragover', function (e) {
+    this.querySelectorAll('.drop-area').forEach(v => v.classList.remove('drop-area'));
+    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"]');
+    // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
+    if (!dropArea && e.dataTransfer.types.includes('Files')) {
+        dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
+    }
+    if (!dropArea) {
+        return;
+    }
+    const main = dropArea.closest('main');
+    if (!main) {
+        return;
+    }
+    if (dropArea === itemToDrop) {
+        return;
+    }
+    dropArea.classList.add('drop-area');
+    e.preventDefault();
+});
+
+document.addEventListener('dragstart', function (e) {
+    itemToDrop = e.target.closest('li[data-route]');
+    if (!itemToDrop) {
+        return;
+    }
+    const main = itemToDrop.closest('main');
+    if (!main) {
+        itemToDrop = null;
+        return;
+    }
+    requestAnimationFrame(() => itemToDrop.classList.add('item-to-drop'));
+});
+
+document.addEventListener('drop', function (e) {
+    e.preventDefault();
+    const {files} = e.dataTransfer;
+    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"]');
+    // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
+    if (!dropArea && files.length > 0) {
+        dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
+    }
+    if (!dropArea) {
+        return;
+    }
+    const main = dropArea.closest('main');
+    if (!main) {
+        return;
+    }
+    if (dropArea === itemToDrop) {
+        return;
+    }
+    if (files && files.length > 0) {
+        for (const file of files) {
+            application.append(createAlert('**TODO:** Upload `' + file.name + '` to `' + dropArea.dataset.route + '`', 'info', 2000));
+        }
+    } else {
+        application.append(createAlert('**TODO:** Move `' + itemToDrop.dataset.route + '` to `' + dropArea.dataset.route + '`', 'info', 2000));
+    }
+    dropArea.classList.remove('drop-area');
 });
 
 document.body.append(dialogFileNew, dialogFolderNew);

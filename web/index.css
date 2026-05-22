@@ -535,7 +535,18 @@ pre code {
 }
 
 [role='status'] {
-  color: #888;
+  color: rgb(0 0 0 / 0.4667); /* `#888` */
+}
+
+
+/* Drag & Drop */
+.drop-area {
+  background-color: rgb(0 0 255 / 0.125);
+  outline: 1px solid #00f;
+}
+
+.item-to-drop {
+  opacity: 0.5;
 }
 
 
