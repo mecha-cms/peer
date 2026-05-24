@@ -252,9 +252,9 @@ formUser.addEventListener('submit', function (e) {
             }
             return;
         }
-        // For a more secure application, you may need to store the hub token data some-where else with encryption
+        // For a more secure application, you may need to store the JWT token data some-where else with encryption
         // and/or similar method(s). This practice is only for demonstration and educational purpose(s).
-        localStorage.setItem('hub', r.data.hub);
+        localStorage.setItem('token', r.data.hub);
         let hash = "",
             path = '/lot/asset',
             query = {
@@ -614,7 +614,7 @@ function createListOfWork(items, patch) {
                         }
                         // TODO: Handle stale token
                         if (401 === r.status) {
-                            localStorage.removeItem('hub');
+                            localStorage.removeItem('token');
                             updateRoute(toPath('/enter')), view(onStaleAfter);
                             return;
                         }
@@ -632,7 +632,7 @@ function createListOfWork(items, patch) {
                         }
                         // TODO: Handle stale token
                         if (401 === r.status) {
-                            localStorage.removeItem('hub');
+                            localStorage.removeItem('token');
                             updateRoute(toPath('/enter')), view(onStaleAfter);
                             return;
                         }
@@ -669,7 +669,7 @@ function createListOfWork(items, patch) {
                     }
                     // TODO: Handle stale token
                     if (401 === r.status) {
-                        localStorage.removeItem('hub');
+                        localStorage.removeItem('token');
                         updateRoute(toPath('/enter')), view(onStaleAfter);
                         return;
                     }
@@ -975,7 +975,7 @@ function f3h(path, method = 'GET', headers = {}, body = "", options = {}) {
     if ('string' !== typeof body) {
         body = JSON.stringify(body);
     }
-    const token = localStorage.getItem('hub');
+    const token = localStorage.getItem('token');
     headers = Object.assign({
         'authorization': 'bearer ' + token,
         'content-type': 'application/json'
@@ -1146,7 +1146,7 @@ function onEnter(path, query, hash, then) {
     // Exit button
     const exit = createElement('button', '🔒 Exit');
     exit.addEventListener('click', function (e) {
-        localStorage.removeItem('hub');
+        localStorage.removeItem('token');
         updateRoute(toPath('/enter')), view(onExitAfter);
         e.preventDefault();
     });
@@ -1468,7 +1468,7 @@ function view(then) {
     const path = fromPath(window.location.pathname);
     const query = fromQuery(window.location.search);
     if ('/enter' === path) {
-        if (localStorage.getItem('hub')) {
+        if (localStorage.getItem('token')) {
             // TODO: Persistent enter state
             viewEnter(path, query, hash, then);
         } else {
@@ -1558,7 +1558,7 @@ function viewItem(path, query, hash, then) {
         }
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('hub');
+            localStorage.removeItem('token');
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
@@ -1599,7 +1599,7 @@ function viewItemFileEditorText(path, query, hash, then) {
         }
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('hub');
+            localStorage.removeItem('token');
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
@@ -1642,7 +1642,7 @@ function viewItemFolderEditor(path, query, hash, then) {
         }
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('hub');
+            localStorage.removeItem('token');
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
@@ -1675,7 +1675,7 @@ function viewItems(path, query, hash, then) {
         }
         // TODO: Handle stale token
         if (401 === r.status) {
-            localStorage.removeItem('hub');
+            localStorage.removeItem('token');
             updateRoute(toPath('/enter')), view(onStaleAfter);
             return;
         }
