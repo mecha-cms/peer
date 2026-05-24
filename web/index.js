@@ -479,7 +479,7 @@ function createListOfMain(items) {
                 chunk: currentChunk,
                 part: 1
             }) : ""),
-            'title': '..' === name ? 'Go to ' + toParent(route) : (is.folder ? 'Open' : 'View') + ' ' + route
+            'title': '..' === name ? 'Go to ' + route : (is.folder ? 'Open' : 'View') + ' ' + route
         });
         link.addEventListener('click', onClick);
         const linkDelete = createElement('a', '🗑️', {
@@ -1861,17 +1861,17 @@ formFolderNew.addEventListener('submit', function (e) {
     e.preventDefault();
 });
 
-let itemToDrop;
+let dropArea, dropIt;
 
 document.addEventListener('dragend', function (e) {
     this.querySelectorAll('.drop-area').forEach(v => v.classList.remove('drop-area'));
-    itemToDrop && itemToDrop.classList.remove('item-to-drop');
-    itemToDrop = null;
+    dropIt && dropIt.classList.remove('drop-it');
+    dropIt = null;
 });
 
 document.addEventListener('dragover', function (e) {
     this.querySelectorAll('.drop-area').forEach(v => v.classList.remove('drop-area'));
-    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
+    dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
     // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
     if (!dropArea && e.dataTransfer.types.includes('Files')) {
         dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
@@ -1883,30 +1883,35 @@ document.addEventListener('dragover', function (e) {
     if (!main) {
         return;
     }
-    if (dropArea === itemToDrop) {
+    let dropAreaRoute = dropArea.dataset.route,
+        dropItRoute = dropIt.dataset.route;
+    if (dropAreaRoute === dropItRoute) {
         return;
+    }
+    if (dropAreaRoute.startsWith(dropItRoute + '/')) {
+        return; // Should deny move `/a` to `/a/b`
     }
     dropArea.classList.add('drop-area');
     e.preventDefault();
 });
 
 document.addEventListener('dragstart', function (e) {
-    itemToDrop = e.target.closest('li[data-route]');
-    if (!itemToDrop) {
+    dropIt = e.target.closest('li[data-route]');
+    if (!dropIt) {
         return;
     }
-    const main = itemToDrop.closest('main');
+    const main = dropIt.closest('main');
     if (!main) {
-        itemToDrop = null;
+        dropIt = null;
         return;
     }
-    requestAnimationFrame(() => itemToDrop.classList.add('item-to-drop'));
+    requestAnimationFrame(() => dropIt.classList.add('drop-it'));
 });
 
 document.addEventListener('drop', function (e) {
     e.preventDefault();
     const {files} = e.dataTransfer;
-    let dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
+    dropArea = e.target.closest('li[data-route][data-type="inode/directory"],main>h3>span>a[data-route]:not([aria-current])');
     // Allow the drop effect on the outer list if the item to drop is from your device’s file/folder explorer
     if (!dropArea && files.length > 0) {
         dropArea = e.target.closest('ul[data-route][data-type="inode/directory"]');
@@ -1918,7 +1923,7 @@ document.addEventListener('drop', function (e) {
     if (!main) {
         return;
     }
-    if (dropArea === itemToDrop) {
+    if (dropArea === dropIt) {
         return;
     }
     if (files && files.length > 0) {
@@ -1926,7 +1931,7 @@ document.addEventListener('drop', function (e) {
             application.append(createAlert('**TODO:** Upload `' + file.name + '` to `' + dropArea.dataset.route + '`', 'info', 2000));
         }
     } else {
-        application.append(createAlert('**TODO:** Move `' + itemToDrop.dataset.route + '` to `' + dropArea.dataset.route + '`', 'info', 2000));
+        application.append(createAlert('**TODO:** Move `' + dropIt.dataset.route + '` to `' + dropArea.dataset.route + '`', 'info', 2000));
     }
     dropArea.classList.remove('drop-area');
 });
